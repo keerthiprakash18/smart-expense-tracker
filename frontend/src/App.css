@@ -1,0 +1,109 @@
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+}
+
+nav {
+  background-color: #2563eb;
+  color: white;
+  padding: 15px 30px;
+}
+
+nav h2 {
+  margin: 0;
+}
+
+nav ul {
+  list-style: none;
+  display: flex;
+  gap: 20px;
+  padding: 0;
+  margin-top: 10px;
+}
+
+nav li {
+  cursor: pointer;
+}
+
+.app {
+  text-align: center;
+}
+
+h1 {
+  margin-top: 50px;
+}
+.home {
+  margin-top: 80px;
+  text-align: center;
+}
+
+.home h1 {
+  font-size: 40px;
+}
+
+.home p {
+  font-size: 20px;
+  margin: 20px 0;
+}
+
+.home button {
+  background-color: #2563eb;
+  color: white;
+  padding: 12px 25px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 18px;
+}
+
+.home button:hover {
+  background-color: #1d4ed8;
+}
+.login-container {
+  width: 350px;
+  margin: 60px auto;
+  text-align: center;
+}
+
+.login-container input {
+  width: 100%;
+  padding: 10px;
+  font-size: 16px;
+}
+
+.login-container button {
+  width: 100%;
+  padding: 10px;
+  background: #2563eb;
+  color: white;
+  border: none;
+  cursor: pointer;
+}
+
+.login-container button:hover {
+  background: #1d4ed8;
+}
+.register-container {
+  width: 350px;
+  margin: 60px auto;
+  text-align: center;
+}
+
+.register-container input {
+  width: 100%;
+  padding: 10px;
+  font-size: 16px;
+}
+
+.register-container button {
+  width: 100%;
+  padding: 10px;
+  background: #2563eb;
+  color: white;
+  border: none;
+  cursor: pointer;
+}
+
+.register-container button:hover {
+  background: #1d4ed8;
+}
