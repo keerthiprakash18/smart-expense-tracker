@@ -1,16 +1,37 @@
-# React + Vite
+# AI-Powered Full-Stack Expense Tracker & Financial Analytics
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+A production-ready personal finance management application built with **React**, **Django REST Framework (DRF)**, **SimpleJWT**, and **EasyOCR**. 
 
-Currently, two official plugins are available:
+## Key Features
+- **User Authentication & Security**: JWT-based stateless auth, strong password policy, phone OTP account verification, and forgot password recovery.
+- **Multi-Tenant Data Isolation**: Database-level query filtering ensuring complete data privacy across individual users.
+- **AI OCR Receipt Scanner**: Automatic extraction of merchant name, total amount, and transaction date from receipt images using EasyOCR.
+- **Interactive Analytics Dashboard**: Real-time spending analysis using Recharts (monthly trends, category distribution, transaction frequency, and metrics).
+- **Expense CRUD & Receipt Preview**: Full expense management with receipt attachments, in-app modal preview, category tags, and search filters.
+- **User Profile Management**: In-app account review and secure password update workflows.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+---
 
-## React Compiler
+## Tech Stack
+- **Frontend**: React.js, React Router v6, Axios, Recharts, Context API
+- **Backend**: Python 3.13, Django 5.x, Django REST Framework, SimpleJWT
+- **Database**: SQLite (Development) / PostgreSQL compatible
+- **ML / OCR**: EasyOCR, PyTorch, Pillow
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+---
 
-## Expanding the Oxlint configuration
+## Setup & Local Installation
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and Oxlint's TypeScript related rules in your project.
+### 1. Backend Setup
+```bash
+cd backend
+python -m venv venv
+# Windows:
+venv\Scripts\activate
+# Linux/Mac:
+source venv/bin/activate
+
+pip install -r requirements.txt
+python manage.py makemigrations
+python manage.py migrate
+python manage.py runserver
