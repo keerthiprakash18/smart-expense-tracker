@@ -21,14 +21,14 @@ class Account(models.Model):
         ('CARD', 'Credit / Debit Card'),
         ('WALLET', 'Digital Wallet')
     ]
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='accounts')
-    name = models.CharField(max_length=100)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True, related_name='accounts')
+    name = models.CharField(max_length=100, default='Primary Account')
     account_type = models.CharField(max_length=20, choices=ACCOUNT_TYPES, default='BANK')
     balance = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
     created_at = models.DateTimeField(default=timezone.now)
 
     def __str__(self):
-        return f"{self.name} ({self.user.username})"
+        return self.name
 
 class Expense(models.Model):
     TRANSACTION_TYPES = [
@@ -36,7 +36,7 @@ class Expense(models.Model):
         ('INCOME', 'Income'),
         ('TRANSFER', 'Transfer')
     ]
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='expenses')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True, related_name='expenses')
     account = models.ForeignKey(Account, on_delete=models.SET_NULL, null=True, blank=True, related_name='transactions')
     title = models.CharField(max_length=200, default='Expense')
     amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
