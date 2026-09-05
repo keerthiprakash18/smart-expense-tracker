@@ -29,6 +29,13 @@ class RegisterView(APIView):
         Account.objects.create(user=user, name='Cash Vault', account_type='CASH', balance=Decimal('5000.00'))
         return Response({'message': 'User registered successfully'}, status=status.HTTP_201_CREATED)
 
+class RequestOTPView(APIView):
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def post(self, request):
+        return Response({'message': 'OTP verification simulated successfully'}, status=status.HTTP_200_OK)
+
 class ExpenseListCreateView(generics.ListCreateAPIView):
     serializer_class = ExpenseSerializer
     permission_classes = [IsAuthenticated]
