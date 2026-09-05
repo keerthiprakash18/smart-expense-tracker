@@ -1,25 +1,19 @@
 from django.contrib import admin
-from .models import Expense
-
+from .models import Expense, Account, UserProfile
 
 @admin.register(Expense)
 class ExpenseAdmin(admin.ModelAdmin):
-    list_display = (
-        "id",
-        "title",
-        "amount",
-        "category",
-        "merchant",
-        "expense_date",
-        "created_at",
-    )
+    list_display = ('id', 'user', 'title', 'amount', 'category', 'transaction_type', 'date', 'created_at')
+    list_filter = ('transaction_type', 'category', 'date')
+    search_fields = ('title', 'user__username', 'category')
 
-    list_filter = (
-        "category",
-        "expense_date",
-    )
+@admin.register(Account)
+class AccountAdmin(admin.ModelAdmin):
+    list_display = ('id', 'user', 'name', 'account_type', 'balance', 'created_at')
+    list_filter = ('account_type',)
+    search_fields = ('name', 'user__username')
 
-    search_fields = (
-        "title",
-        "merchant",
-    )
+@admin.register(UserProfile)
+class UserProfileAdmin(admin.ModelAdmin):
+    list_display = ('id', 'user', 'phone', 'currency', 'monthly_budget')
+    search_fields = ('user__username', 'phone')
