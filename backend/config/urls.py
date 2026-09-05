@@ -13,8 +13,7 @@ from expenses.views import (
     ReceiptScanView,
 )
 
-# Routes list
-routes = [
+api_patterns = [
     path('token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('register/', RegisterView.as_view(), name='register'),
@@ -27,8 +26,6 @@ routes = [
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    # Accepts /api/token/, /api/register/, /api/dashboard/ etc.
-    path('api/', include(routes)),
-    # Fallback directly to root paths: /token/, /register/ etc.
-    path('', include(routes)),
+    path('api/', include(api_patterns)),
+    path('', include(api_patterns)),
 ]
