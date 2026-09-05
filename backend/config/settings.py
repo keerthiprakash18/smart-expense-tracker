@@ -9,10 +9,10 @@ SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-expense-tracker-prod-
 
 DEBUG = os.environ.get('DEBUG', 'False').lower() in ['true', '1']
 
-# Accept requests from all origins (Cloud + Mobile Webview)
 ALLOWED_HOSTS = ['*']
 
 INSTALLED_APPS = [
+    'corsheaders',  # Must be loaded before django apps
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -22,17 +22,16 @@ INSTALLED_APPS = [
     # Third-party
     'rest_framework',
     'rest_framework_simplejwt',
-    'corsheaders',
     # Local apps
     'expenses',
 ]
 
 MIDDLEWARE = [
-    'corsheaders.middleware.CorsMiddleware',
+    'corsheaders.middleware.CorsMiddleware',  # MUST BE AT THE VERY TOP
+    'django.middleware.common.CommonMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
-    'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
@@ -101,33 +100,29 @@ SIMPLE_JWT = {
     'AUTH_HEADER_TYPES': ('Bearer',),
 }
 
-# Complete Mobile Webview + Cloud CORS Settings
+# --- BULLETPROOF CORS CONFIGURATION ---
 CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOW_CREDENTIALS = True
+
 CORS_ALLOW_METHODS = [
-    "DELETE",
-    "GET",
-    "OPTIONS",
-    "PATCH",
-    "POST",
-    "PUT",
-]
-CORS_ALLOW_HEADERS = [
-    "accept",
-    "accept-encoding",
-    "authorization",
-    "content-type",
-    "dnt",
-    "origin",
-    "user-agent",
-    "x-csrftoken",
-    "x-requested-with",
+    'DELETE',
+    'GET',
+    'OPTIONS',
+    'PATCH',
+    'POST',
+    'PUT',
 ]
 
-CSRF_TRUSTED_ORIGINS = [
-    'https://*.onrender.com',
-    'http://localhost:5173',
-    'http://localhost',
-    'capacitor://localhost',
-    'https://localhost'
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
 ]
+
+CORS_PREFLIGHT_MAX_AGE = 86400
