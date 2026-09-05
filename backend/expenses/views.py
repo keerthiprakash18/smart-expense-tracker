@@ -3,6 +3,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser
 from django.contrib.auth.models import User
+from django.db.models import Sum
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from .models import Expense
@@ -57,6 +58,26 @@ class ExpenseDetailView(generics.RetrieveUpdateDestroyAPIView):
 
     def get_queryset(self):
         return Expense.objects.filter(user=self.request.user)
+
+
+class DashboardSummaryView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        user_expenses = Expense.objects.filter(user=request.user)
+        total_spent = user_expenses.aggregate(Sum('amount'))['amount__sum'] or 0.0
+        
+        category_breakdown = (
+            user_expenses.values('category')
+            .annotate(total=Sum('amount'))
+            .order_by('-total')
+        )
+
+        return Response({
+            "total_spent": float(total_spent),
+            "category_breakdown": list(category_breakdown),
+            "recent_count": user_expenses.count()
+        }, status=status.HTTP_200_OK)
 
 
 class ScanReceiptView(APIView):
