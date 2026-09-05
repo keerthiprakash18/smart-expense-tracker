@@ -1,4 +1,4 @@
-from rest_framework import viewsets, permissions, status
+from rest_framework import generics, permissions, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser
@@ -40,7 +40,7 @@ class RegisterView(APIView):
         }, status=status.HTTP_201_CREATED)
 
 
-class ExpenseViewSet(viewsets.ModelViewSet):
+class ExpenseListCreateView(generics.ListCreateAPIView):
     serializer_class = ExpenseSerializer
     permission_classes = [permissions.IsAuthenticated]
 
@@ -51,6 +51,14 @@ class ExpenseViewSet(viewsets.ModelViewSet):
         serializer.save(user=self.request.user)
 
 
+class ExpenseDetailView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = ExpenseSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return Expense.objects.filter(user=self.request.user)
+
+
 class ScanReceiptView(APIView):
     permission_classes = [permissions.IsAuthenticated]
     parser_classes = (MultiPartParser, FormParser)
@@ -59,7 +67,7 @@ class ScanReceiptView(APIView):
         receipt = request.FILES.get('receipt') or request.FILES.get('image')
         if not receipt:
             return Response({"error": "No image uploaded"}, status=status.HTTP_400_BAD_REQUEST)
-        
+
         try:
             data = extract_receipt_data(receipt)
             return Response(data, status=status.HTTP_200_OK)
