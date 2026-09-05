@@ -22,7 +22,7 @@ class RegisterView(APIView):
         if User.objects.filter(username=username).exists():
             return Response({'error': 'Username already exists'}, status=status.HTTP_400_BAD_REQUEST)
 
-        user = User.objects.create_user(username=username, email=email, password=password)
+        User.objects.create_user(username=username, email=email, password=password)
         return Response({'message': 'User registered successfully'}, status=status.HTTP_201_CREATED)
 
 class RequestOTPView(APIView):
@@ -37,8 +37,24 @@ class ExpenseListCreateView(generics.ListCreateAPIView):
     def get_queryset(self):
         return Expense.objects.filter(user=self.request.user).order_by('-date')
 
-    def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
+    def create(self, request, *args, **kwargs):
+        title = request.data.get('title')
+        amount = request.data.get('amount')
+        category = request.data.get('category', 'General')
+        date = request.data.get('date')
+
+        if not title or not amount:
+            return Response({'error': 'Title and amount are required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        expense = Expense.objects.create(
+            user=request.user,
+            title=title,
+            amount=amount,
+            category=category,
+            date=date
+        )
+        serializer = self.get_serializer(expense)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 class ExpenseDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = ExpenseSerializer
