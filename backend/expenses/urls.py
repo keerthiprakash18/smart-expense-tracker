@@ -1,18 +1,19 @@
-from django.urls import path
-from .views import (
-    RegisterView,
-    RequestOTPView,
-    ExpenseListCreateView,
-    ExpenseDetailView,
-    DashboardSummaryView,
-    ReceiptScanView,
+from django.contrib import admin
+from django.urls import path, include
+from rest_framework_simplejwt.views import (
+    TokenObtainPairView,
+    TokenRefreshView,
 )
 
 urlpatterns = [
-    path('register/', RegisterView.as_view(), name='register'),
-    path('request-otp/', RequestOTPView.as_view(), name='request-otp'),
-    path('expenses/', ExpenseListCreateView.as_view(), name='expense-list-create'),
-    path('expenses/<int:pk>/', ExpenseDetailView.as_view(), name='expense-detail'),
-    path('dashboard/', DashboardSummaryView.as_view(), name='dashboard-summary'),
-    path('scan-receipt/', ReceiptScanView.as_view(), name='scan-receipt'),
+    path('admin/', admin.site.urls),
+    # JWT Auth endpoints
+    path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
+    path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    # Also support without /api prefix to prevent 404
+    path('token/', TokenObtainPairView.as_view(), name='token_obtain_pair_no_api'),
+    path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh_no_api'),
+    # Expenses App
+    path('api/', include('expenses.urls')),
+    path('', include('expenses.urls')),
 ]
