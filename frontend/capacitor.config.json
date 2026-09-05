@@ -1,0 +1,9 @@
+{
+  "appId": "com.keerthi.expensetracker",
+  "appName": "Smart Expense Tracker",
+  "webDir": "dist",
+  "bundledWebRuntime": false,
+  "server": {
+    "androidScheme": "https"
+  }
+}

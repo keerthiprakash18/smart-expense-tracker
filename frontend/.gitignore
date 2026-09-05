@@ -1,6 +1,7 @@
-# Node
+# Node & Vite
 frontend/node_modules/
 frontend/build/
+frontend/dist/
 
 # Python / Django
 backend/venv/
@@ -8,6 +9,7 @@ backend/__pycache__/
 backend/*/__pycache__/
 backend/*.sqlite3
 backend/media/receipts/*
+backend/staticfiles/
 
 # Environment & OS
 .env
