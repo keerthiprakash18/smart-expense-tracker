@@ -1,6 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import User
 from decimal import Decimal
+from django.utils import timezone
 
 class UserProfile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
@@ -24,7 +25,7 @@ class Account(models.Model):
     name = models.CharField(max_length=100)
     account_type = models.CharField(max_length=20, choices=ACCOUNT_TYPES, default='BANK')
     balance = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(default=timezone.now)
 
     def __str__(self):
         return f"{self.name} ({self.user.username})"
@@ -37,14 +38,14 @@ class Expense(models.Model):
     ]
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='expenses')
     account = models.ForeignKey(Account, on_delete=models.SET_NULL, null=True, blank=True, related_name='transactions')
-    title = models.CharField(max_length=200)
-    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    title = models.CharField(max_length=200, default='Expense')
+    amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
     transaction_type = models.CharField(max_length=10, choices=TRANSACTION_TYPES, default='EXPENSE')
     category = models.CharField(max_length=100, default='General')
-    date = models.DateField()
+    date = models.DateField(default=timezone.now)
     notes = models.TextField(blank=True, null=True)
     receipt_image = models.ImageField(upload_to='receipts/', blank=True, null=True)
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(default=timezone.now)
 
     class Meta:
         ordering = ['-date', '-id']
