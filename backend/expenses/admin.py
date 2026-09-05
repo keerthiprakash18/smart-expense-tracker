@@ -3,8 +3,8 @@ from .models import Expense, Account, UserProfile
 
 @admin.register(Expense)
 class ExpenseAdmin(admin.ModelAdmin):
-    list_display = ('id', 'user', 'title', 'amount', 'category', 'transaction_type', 'date', 'created_at')
-    list_filter = ('transaction_type', 'category', 'date')
+    list_display = ('id', 'user', 'title', 'amount', 'category', 'transaction_type', 'payment_method', 'date')
+    list_filter = ('transaction_type', 'category', 'payment_method', 'date')
     search_fields = ('title', 'user__username', 'category')
 
 @admin.register(Account)
@@ -15,5 +15,5 @@ class AccountAdmin(admin.ModelAdmin):
 
 @admin.register(UserProfile)
 class UserProfileAdmin(admin.ModelAdmin):
-    list_display = ('id', 'user', 'phone', 'currency', 'monthly_budget')
+    list_display = ('id', 'user', 'phone', 'currency', 'monthly_budget', 'savings_goal')
     search_fields = ('user__username', 'phone')
