@@ -10,6 +10,7 @@ from .views import (
 
 urlpatterns = [
     path('register/', RegisterView.as_view(), name='register'),
+    path('register', RegisterView.as_view(), name='register-no-slash'),
     path('request-otp/', RequestOTPView.as_view(), name='request-otp'),
     path('expenses/', ExpenseListCreateView.as_view(), name='expense-list-create'),
     path('expenses/<int:pk>/', ExpenseDetailView.as_view(), name='expense-detail'),
