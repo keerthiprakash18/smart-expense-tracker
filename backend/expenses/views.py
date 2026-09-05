@@ -80,7 +80,8 @@ class DashboardSummaryView(APIView):
         }, status=status.HTTP_200_OK)
 
 
-class ScanReceiptView(APIView):
+# Both names included so URL routing will never fail
+class ReceiptScanView(APIView):
     permission_classes = [permissions.IsAuthenticated]
     parser_classes = (MultiPartParser, FormParser)
 
@@ -94,3 +95,6 @@ class ScanReceiptView(APIView):
             return Response(data, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+# Alias for backwards compatibility
+ScanReceiptView = ReceiptScanView
