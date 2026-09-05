@@ -1,6 +1,6 @@
-import os
-from decimal import Decimal
+import re
 from datetime import datetime
+from decimal import Decimal
 from rest_framework import generics, status
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -8,7 +8,7 @@ from rest_framework.views import APIView
 from rest_framework.parsers import MultiPartParser, FormParser
 from django.contrib.auth.models import User
 from django.db.models import Sum
-from .models import Expense, Account, UserProfile
+from .models import Expense, Account, UserProfile, Bill, SavingsGoal, Category
 from .serializers import ExpenseSerializer
 from .ocr_service import IndiaReceiptExtractor
 
@@ -54,6 +54,7 @@ class ExpenseListCreateView(generics.ListCreateAPIView):
         t_type = request.data.get('transaction_type', 'EXPENSE')
         p_method = request.data.get('payment_method', 'UPI')
         date = request.data.get('date', datetime.now().strftime('%Y-%m-%d'))
+        time = request.data.get('time', datetime.now().strftime('%H:%M'))
         notes = request.data.get('notes', '')
         receipt_file = request.FILES.get('receipt_image')
 
@@ -62,7 +63,6 @@ class ExpenseListCreateView(generics.ListCreateAPIView):
         except Exception:
             amount = Decimal('0.00')
 
-        # Check account linking
         account_name = request.data.get('account')
         account = None
         if account_name:
@@ -77,11 +77,11 @@ class ExpenseListCreateView(generics.ListCreateAPIView):
             category=category,
             payment_method=p_method,
             date=date,
+            time=time,
             notes=notes,
             receipt_image=receipt_file
         )
 
-        # Real-time ledger balance adjustment
         if account:
             if t_type == 'INCOME':
                 account.balance += amount
@@ -106,8 +106,6 @@ class DashboardSummaryView(APIView):
         total_exp = txs.filter(transaction_type='EXPENSE').aggregate(Sum('amount'))['amount__sum'] or Decimal('0.00')
         total_inc = txs.filter(transaction_type='INCOME').aggregate(Sum('amount'))['amount__sum'] or Decimal('0.00')
         net_balance = total_inc - total_exp
-
-        # OCR receipt expense count metric
         ocr_count = txs.exclude(receipt_image='').count()
 
         return Response({
@@ -119,10 +117,6 @@ class DashboardSummaryView(APIView):
         })
 
 class ReceiptScanView(APIView):
-    """
-    Dedicated OCR Scan Endpoint with File Preprocessing, India-Friendly Parsing,
-    and Duplicate Expense Detection.
-    """
     permission_classes = [IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser]
 
@@ -131,14 +125,12 @@ class ReceiptScanView(APIView):
         if not file_obj:
             return Response({'error': 'No receipt image or PDF uploaded.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # File size check (10MB maximum)
         if file_obj.size > 10 * 1024 * 1024:
             return Response({'error': 'File size exceeds maximum 10MB limit.'}, status=status.HTTP_400_BAD_REQUEST)
 
         filename = file_obj.name.lower()
         extracted_text = ""
 
-        # Step 2 & 3: Modular Preprocessing and OCR Execution
         if filename.endswith('.pdf'):
             try:
                 import pypdf
@@ -149,23 +141,17 @@ class ReceiptScanView(APIView):
                 extracted_text = f"PDF Invoice {filename} Total: 1850.00 GST: 280.00 Date: {datetime.now().strftime('%Y-%m-%d')}"
         else:
             try:
-                from PIL import Image, ImageEnhance, ImageFilter
+                from PIL import Image, ImageEnhance
                 import pytesseract
 
-                img = Image.open(file_obj)
-                # Preprocessing: Convert to Grayscale & Contrast enhancement
-                img = img.convert('L')
+                img = Image.open(file_obj).convert('L')
                 img = ImageEnhance.Contrast(img).enhance(1.8)
                 extracted_text = pytesseract.image_to_string(img)
             except Exception:
-                # Safe regex simulator if tesseract binaries not on host
                 extracted_text = f"Receipt {filename} Total Amount: 420.00 Date: {datetime.now().strftime('%Y-%m-%d')}"
 
-        # Step 4: India-friendly Document Parser
         parsed_result = IndiaReceiptExtractor.parse_document(extracted_text, filename)
 
-        # Step 5: Duplicate Receipt Detection
-        # Compare Merchant, Amount, and Date within existing user ledger
         duplicate_tx = Expense.objects.filter(
             user=request.user,
             amount=Decimal(str(parsed_result['amount'])),
