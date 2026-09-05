@@ -13,8 +13,8 @@ from expenses.views import (
     ReceiptScanView,
 )
 
-# Shared direct endpoints to never fail with or without /api prefix
-api_patterns = [
+# Routes list
+routes = [
     path('token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('register/', RegisterView.as_view(), name='register'),
@@ -27,8 +27,8 @@ api_patterns = [
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    # Handles /api/... calls from frontend proxy & mobile
-    path('api/', include(api_patterns)),
-    # Handles direct calls without /api/ prefix
-    path('', include(api_patterns)),
+    # Accepts /api/token/, /api/register/, /api/dashboard/ etc.
+    path('api/', include(routes)),
+    # Fallback directly to root paths: /token/, /register/ etc.
+    path('', include(routes)),
 ]
