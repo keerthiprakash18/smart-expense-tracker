@@ -22,7 +22,7 @@ class Account(models.Model):
         ('WALLET', 'Digital Wallet')
     ]
     user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True, related_name='accounts')
-    name = models.CharField(max_length=100, default='Primary Account')
+    name = models.CharField(max_length=100, default='Primary Bank')
     account_type = models.CharField(max_length=20, choices=ACCOUNT_TYPES, default='BANK')
     balance = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
     created_at = models.DateTimeField(default=timezone.now)
@@ -45,6 +45,7 @@ class Expense(models.Model):
     category = models.CharField(max_length=100, default='General')
     payment_method = models.CharField(max_length=50, default='UPI')
     date = models.DateField(default=timezone.now)
+    time = models.CharField(max_length=10, default='12:00')
     notes = models.TextField(blank=True, null=True)
     receipt_image = models.ImageField(upload_to='receipts/', blank=True, null=True)
     created_at = models.DateTimeField(default=timezone.now)
