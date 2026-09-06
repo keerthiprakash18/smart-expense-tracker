@@ -1,23 +1,42 @@
 import axios from 'axios';
 
-// Vite dev server proxy vazhiya /api nu pogum (zero CORS / zero preflight error)
-const isNativeMobile = window.location.protocol.startsWith('capacitor') || (window.location.protocol.startsWith('http') && window.location.port !== '5173');
-const API_BASE_URL = isNativeMobile ? 'https://smart-expense-tracker-yhyq.onrender.com' : '';
+// ======================================================
+// SMART EXPENSE TRACKER - API CONFIG
+// ======================================================
+
+// Public backend hosted on Render
+const API_BASE_URL =
+  'https://smart-expense-tracker-zaxw.onrender.com';
+
+// ======================================================
+// AXIOS INSTANCE
+// ======================================================
 
 const api = axios.create({
   baseURL: API_BASE_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
   timeout: 60000,
 });
 
-export const getAccessToken = () => localStorage.getItem('access_token');
-export const getRefreshToken = () => localStorage.getItem('refresh_token');
+// ======================================================
+// TOKEN HELPERS
+// ======================================================
+
+export const getAccessToken = () => {
+  return localStorage.getItem('access_token');
+};
+
+export const getRefreshToken = () => {
+  return localStorage.getItem('refresh_token');
+};
 
 export const setTokens = (accessToken, refreshToken) => {
-  if (accessToken) localStorage.setItem('access_token', accessToken);
-  if (refreshToken) localStorage.setItem('refresh_token', refreshToken);
+  if (accessToken) {
+    localStorage.setItem('access_token', accessToken);
+  }
+
+  if (refreshToken) {
+    localStorage.setItem('refresh_token', refreshToken);
+  }
 };
 
 export const clearTokens = () => {
@@ -25,25 +44,49 @@ export const clearTokens = () => {
   localStorage.removeItem('refresh_token');
 };
 
+// ======================================================
+// REQUEST INTERCEPTOR
+// ======================================================
+
 api.interceptors.request.use(
   (config) => {
     const token = getAccessToken();
+
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+
+    // Don't overwrite multipart/form-data headers
+    if (!(config.data instanceof FormData)) {
+      config.headers['Content-Type'] = 'application/json';
+    }
+
     return config;
   },
-  (error) => Promise.reject(error)
-);
-
-api.interceptors.response.use(
-  (response) => response,
   (error) => {
-    if (error.response && error.response.status === 401) {
-      clearTokens();
-    }
     return Promise.reject(error);
   }
 );
+
+// ======================================================
+// RESPONSE INTERCEPTOR
+// ======================================================
+
+api.interceptors.response.use(
+  (response) => {
+    return response;
+  },
+  (error) => {
+    if (error.response?.status === 401) {
+      clearTokens();
+    }
+
+    return Promise.reject(error);
+  }
+);
+
+// ======================================================
+// EXPORT
+// ======================================================
 
 export default api;

@@ -17,16 +17,18 @@ export default function Login() {
 
     try {
       if (isRegister) {
+        // Register call via proxy (No CORS possible)
         await api.post('/api/register/', {
           username: username.trim(),
           email: email.trim(),
-          password: password.trim()
+          password: password.trim(),
         });
       }
 
+      // Login call via proxy
       const res = await api.post('/api/token/', {
         username: username.trim(),
-        password: password.trim()
+        password: password.trim(),
       });
 
       if (res.data && res.data.access) {
@@ -34,18 +36,18 @@ export default function Login() {
         window.location.hash = '#/';
         window.location.reload();
       } else {
-        throw new Error('Token generation failed');
+        throw new Error('Token verification failed');
       }
     } catch (err) {
-      console.error(err);
+      console.error('Auth Error Details:', err);
       if (err.response && err.response.data) {
         const d = err.response.data;
         const msg = typeof d === 'object' ? Object.values(d).flat().join(' ') : 'Authentication failed';
         setError(msg);
       } else if (err.code === 'ERR_NETWORK') {
-        setError('Server is connecting... Please wait 30 seconds if Render was idle and retry.');
+        setError('Server is connecting... Please wait 30 seconds if Render was sleeping and retry.');
       } else {
-        setError('Authentication failed. Please verify your credentials.');
+        setError('Authentication failed. Check your network or credentials.');
       }
     } finally {
       setLoading(false);
@@ -107,7 +109,7 @@ export default function Login() {
             {isRegister ? 'Create Account' : 'Welcome Back'}
           </h2>
           <p style={{ color: 'rgba(235, 235, 245, 0.55)', fontSize: '13px', margin: 0 }}>
-            {isRegister ? 'Start tracking your expenses with precision' : 'Sign in to access your financial dashboard'}
+            {isRegister ? 'Start tracking expenses with ease' : 'Sign in to access your financial dashboard'}
           </p>
         </div>
 

@@ -1,22 +1,30 @@
 import React from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 
-import Home from "../pages/Home";
 import Login from "../pages/Login";
 import Register from "../pages/Register";
 import Dashboard from "../pages/Dashboard";
-import Expenses from "../pages/Expenses";
-import Profile from "../pages/Profile";
 import ProtectedRoute from "./ProtectedRoute";
 
 const AppRouter = () => {
   return (
     <Routes>
-      <Route path="/" element={<Home />} />
+      {/* Login */}
       <Route path="/login" element={<Login />} />
+
+      {/* Register */}
       <Route path="/register" element={<Register />} />
 
-      {/* Protected Routes */}
+      {/* Main App */}
+      <Route
+        path="/"
+        element={
+          <ProtectedRoute>
+            <Dashboard />
+          </ProtectedRoute>
+        }
+      />
+
       <Route
         path="/dashboard"
         element={
@@ -25,23 +33,28 @@ const AppRouter = () => {
           </ProtectedRoute>
         }
       />
+
+      {/* Keep expenses inside the existing Dashboard */}
       <Route
         path="/expenses"
         element={
           <ProtectedRoute>
-            <Expenses />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/profile"
-        element={
-          <ProtectedRoute>
-            <Profile />
+            <Dashboard />
           </ProtectedRoute>
         }
       />
 
+      {/* Profile also uses the existing Dashboard profile */}
+      <Route
+        path="/profile"
+        element={
+          <ProtectedRoute>
+            <Dashboard />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Unknown route */}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

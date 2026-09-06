@@ -5,7 +5,7 @@ import dj_database_url
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-fintech-key-production-ready-2026')
+SECRET_KEY = os.environ['SECRET_KEY']
 
 DEBUG = os.environ.get('DEBUG', 'False').lower() in ('true', '1')
 
@@ -55,17 +55,21 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'config.wsgi.application'
 
-# Smart Database Router (Postgres on Render, clean SQLite locally)
-database_url = os.environ.get('DATABASE_URL')
-if database_url:
+# ==============================================================================
+# SMART DATABASE ROUTER (Render PostgreSQL & Local SQLite Safe Fallback)
+# ==============================================================================
+database_url = os.environ.get('DATABASE_URL', '').strip()
+
+if database_url and (database_url.startswith('postgres://') or database_url.startswith('postgresql://')):
     DATABASES = {
-        'default': dj_database_url.config(
-            default=database_url,
+        'default': dj_database_url.parse(
+            database_url,
             conn_max_age=600,
             ssl_require=True
         )
     }
 else:
+    # Automatic safe fallback to local SQLite when DATABASE_URL is absent or malformed
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
@@ -73,6 +77,9 @@ else:
         }
     }
 
+# ==============================================================================
+# PASSWORD VALIDATION
+# ==============================================================================
 AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
     {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'},
@@ -80,17 +87,29 @@ AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
 ]
 
+# ==============================================================================
+# INTERNATIONALIZATION
+# ==============================================================================
 LANGUAGE_CODE = 'en-us'
 TIME_ZONE = 'UTC'
 USE_I18N = True
 USE_TZ = True
 
+# ==============================================================================
+# STATIC & MEDIA FILES
+# ==============================================================================
 STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+# ==============================================================================
+# REST FRAMEWORK & JWT SETTINGS
+# ==============================================================================
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
@@ -108,7 +127,9 @@ SIMPLE_JWT = {
     'AUTH_HEADER_TYPES': ('Bearer',),
 }
 
-# Universal CORS Configuration
+# ==============================================================================
+# CORS HEADERS
+# ==============================================================================
 CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOW_HEADERS = ['*']

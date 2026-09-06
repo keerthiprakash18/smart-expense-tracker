@@ -1,64 +1,223 @@
-from django.contrib.auth.models import User
+from decimal import Decimal
+
 from rest_framework import serializers
 
-from .models import Expense
+from .models import Expense, Account
 
 
-class ExpenseSerializer(serializers.ModelSerializer):
-
+class AccountSerializer(serializers.ModelSerializer):
     class Meta:
-        model = Expense
-
+        model = Account
         fields = [
             "id",
-            "title",
-            "amount",
-            "category",
-            "merchant",
-            "expense_date",
-            "receipt",
+            "name",
+            "account_type",
+            "balance",
             "created_at",
         ]
-
         read_only_fields = [
             "id",
             "created_at",
         ]
 
 
-class RegisterSerializer(serializers.Serializer):
-
-    name = serializers.CharField(
-        max_length=150
+class ExpenseSerializer(serializers.ModelSerializer):
+    account_name = serializers.CharField(
+        source="account.name",
+        read_only=True,
+        allow_null=True,
     )
 
-    email = serializers.EmailField()
-
-    password = serializers.CharField(
-        min_length=6,
-        write_only=True
+    account = serializers.PrimaryKeyRelatedField(
+        queryset=Account.objects.none(),
+        required=False,
+        allow_null=True,
     )
 
-    def validate_email(self, value):
+    amount = serializers.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        min_value=Decimal("0.01"),
+    )
 
-        value = value.lower().strip()
+    ocr_confidence = serializers.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        min_value=Decimal("0"),
+        max_value=Decimal("100"),
+        required=False,
+        allow_null=True,
+    )
 
-        if User.objects.filter(
-            username=value
-        ).exists():
+    class Meta:
+        model = Expense
 
+        fields = [
+            "id",
+            "user",
+            "account",
+            "account_name",
+            "title",
+            "amount",
+            "transaction_type",
+            "category",
+            "payment_method",
+            "date",
+            "time",
+            "notes",
+            "is_recurring",
+            "receipt_image",
+            "ocr_confidence",
+            "created_at",
+        ]
+
+        read_only_fields = [
+            "id",
+            "user",
+            "account_name",
+            "created_at",
+        ]
+
+        extra_kwargs = {
+            "title": {
+                "required": False,
+            },
+            "category": {
+                "required": False,
+            },
+            "payment_method": {
+                "required": False,
+            },
+            "date": {
+                "required": False,
+            },
+            "time": {
+                "required": False,
+            },
+            "notes": {
+                "required": False,
+                "allow_blank": True,
+            },
+            "is_recurring": {
+                "required": False,
+            },
+            "receipt_image": {
+                "required": False,
+                "allow_null": True,
+            },
+            "transaction_type": {
+                "required": False,
+            },
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        request = self.context.get("request")
+
+        if request and getattr(request, "user", None):
+            user = request.user
+
+            if user.is_authenticated:
+                self.fields["account"].queryset = Account.objects.filter(
+                    user=user
+                )
+
+    def validate_title(self, value):
+        value = (value or "").strip()
+
+        if not value:
             raise serializers.ValidationError(
-                "An account with this email already exists."
+                "Title cannot be empty."
             )
 
         return value
 
+    def validate_time(self, value):
+        value = (value or "").strip()
 
-class VerifyOTPSerializer(serializers.Serializer):
+        if not value:
+            return "12:00"
 
-    email = serializers.EmailField()
+        if len(value) > 10:
+            raise serializers.ValidationError(
+                "Time must be 10 characters or fewer."
+            )
 
-    otp = serializers.CharField(
-        min_length=6,
-        max_length=6
-    )
+        return value
+
+    def validate(self, attrs):
+        request = self.context.get("request")
+
+        user = (
+            getattr(request, "user", None)
+            if request
+            else None
+        )
+
+        account = attrs.get("account")
+
+        # Security: user can only select their own account
+        if (
+            account is not None
+            and user
+            and user.is_authenticated
+        ):
+            if account.user_id != user.id:
+                raise serializers.ValidationError(
+                    {
+                        "account": (
+                            "You can only use your own account."
+                        )
+                    }
+                )
+
+        transaction_type = attrs.get(
+            "transaction_type",
+            getattr(
+                self.instance,
+                "transaction_type",
+                "EXPENSE",
+            ),
+        )
+
+        valid_types = dict(
+            Expense.TRANSACTION_TYPES
+        )
+
+        if transaction_type not in valid_types:
+            raise serializers.ValidationError(
+                {
+                    "transaction_type": (
+                        "Invalid transaction type."
+                    )
+                }
+            )
+
+        return attrs
+
+    def create(self, validated_data):
+        request = self.context.get("request")
+
+        user = (
+            getattr(request, "user", None)
+            if request
+            else None
+        )
+
+        if user and user.is_authenticated:
+            validated_data["user"] = user
+
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        # Never allow changing transaction owner
+        validated_data.pop("user", None)
+
+        # Read-only field
+        validated_data.pop("account_name", None)
+
+        return super().update(
+            instance,
+            validated_data
+        )

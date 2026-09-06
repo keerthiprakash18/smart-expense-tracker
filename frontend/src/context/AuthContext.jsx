@@ -1,19 +1,34 @@
-import React, { createContext, useState, useContext, useEffect } from "react";
-import { getAccessToken, clearTokens } from "../services/api";
+import React, {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+} from "react";
 
-const AuthContext = createContext();
+import {
+  getAccessToken,
+  clearTokens,
+} from "../services/api";
+
+const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
-  const [token, setToken] = useState(getAccessToken());
+  const [token, setToken] = useState(() => getAccessToken());
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    setToken(getAccessToken());
+    const existingToken = getAccessToken();
+    setToken(existingToken);
     setLoading(false);
   }, []);
 
-  const loginUser = (accessToken) => {
+  const loginUser = (accessToken, refreshToken = null) => {
+    if (!accessToken) return;
+
     setToken(accessToken);
+
+    // Token storage is handled by the login/API layer.
+    // This keeps AuthContext focused on authentication state.
   };
 
   const logoutUser = () => {
@@ -21,21 +36,36 @@ export const AuthProvider = ({ children }) => {
     setToken(null);
   };
 
-  const isAuthenticated = !!token;
+  const refreshAuthState = () => {
+    setToken(getAccessToken());
+  };
+
+  const isAuthenticated = Boolean(token);
 
   return (
     <AuthContext.Provider
       value={{
         token,
         isAuthenticated,
+        loading,
         loginUser,
         logoutUser,
-        loading,
+        refreshAuthState,
       }}
     >
-      {!loading && children}
+      {children}
     </AuthContext.Provider>
   );
 };
 
-export const useAuth = () => useContext(AuthContext);
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+
+  if (!context) {
+    throw new Error(
+      "useAuth must be used inside an AuthProvider"
+    );
+  }
+
+  return context;
+};

@@ -1,39 +1,37 @@
-import React from 'react';
-import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import Dashboard from './pages/Dashboard';
-import Login from './pages/Login';
-import { getAccessToken } from './services/api';
-
-const ProtectedRoute = ({ children }) => {
-  const token = getAccessToken();
-  return token ? children : <Navigate to="/login" replace />;
-};
+import React, { useState } from "react";
+import { HashRouter as Router } from "react-router-dom";
+import { AuthProvider } from "./context/AuthContext";
+import AppRouter from "./routes/AppRouter";
+import Welcome from "./pages/welcome";
 
 export default function App() {
+  const [hasSeenIntro, setHasSeenIntro] = useState(() => {
+    return localStorage.getItem("titan_intro_seen") === "true";
+  });
+
+  const handleFinishIntro = () => {
+    localStorage.setItem("titan_intro_seen", "true");
+    setHasSeenIntro(true);
+  };
+
+  if (!hasSeenIntro) {
+    return <Welcome onComplete={handleFinishIntro} />;
+  }
+
   return (
-    <Router>
-      <div style={{ minHeight: '100vh', backgroundColor: '#000000', color: '#ffffff' }}>
-        <Routes>
-          <Route path="/login" element={<Login />} />
-          <Route 
-            path="/" 
-            element={
-              <ProtectedRoute>
-                <Dashboard />
-              </ProtectedRoute>
-            } 
-          />
-          <Route 
-            path="/expenses" 
-            element={
-              <ProtectedRoute>
-                <Dashboard />
-              </ProtectedRoute>
-            } 
-          />
-          <Route path="*" element={<Navigate to="/login" replace />} />
-        </Routes>
-      </div>
-    </Router>
+    <AuthProvider>
+      <Router>
+        <div
+          style={{
+            minHeight: "100vh",
+            width: "100%",
+            background: "#05070A",
+            color: "#FFFFFF",
+          }}
+        >
+          <AppRouter />
+        </div>
+      </Router>
+    </AuthProvider>
   );
 }
