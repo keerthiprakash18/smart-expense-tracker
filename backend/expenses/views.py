@@ -556,11 +556,17 @@ class ExpenseDetailView(
         try:
             with transaction.atomic():
 
-                # Lock transaction row
+                # IMPORTANT:
+                # Do NOT use select_related("account")
+                # together with select_for_update().
+                #
+                # account is nullable, and PostgreSQL can reject
+                # FOR UPDATE on the nullable side of an outer join.
+                #
+                # So lock the Expense row separately first.
                 expense = (
                     Expense.objects
                     .select_for_update()
-                    .select_related("account")
                     .get(
                         pk=kwargs["pk"],
                         user=request.user
@@ -577,28 +583,31 @@ class ExpenseDetailView(
 
                 old_type = expense.transaction_type
 
-                old_account_id = (
-                    expense.account_id
-                )
+                old_account_id = expense.account_id
 
                 # --------------------------------------------
-                # Resolve NEW ACCOUNT
+                # RESOLVE NEW ACCOUNT
                 # --------------------------------------------
 
                 data = request.data.copy()
 
                 if "account" in data:
+
                     new_account = get_user_account(
                         request.user,
                         data.get("account")
                     )
 
-                    if data.get("account") not in (
-                        None,
-                        "",
-                        "null",
-                        "undefined"
-                    ) and not new_account:
+                    if (
+                        data.get("account")
+                        not in (
+                            None,
+                            "",
+                            "null",
+                            "undefined"
+                        )
+                        and not new_account
+                    ):
                         return Response(
                             {
                                 "error":
@@ -616,12 +625,16 @@ class ExpenseDetailView(
                             "account",
                             None
                         )
+
                 else:
+
                     new_account = (
-                        Account.objects.filter(
+                        Account.objects
+                        .filter(
                             id=expense.account_id,
                             user=request.user
-                        ).first()
+                        )
+                        .first()
                         if expense.account_id
                         else None
                     )
@@ -655,12 +668,13 @@ class ExpenseDetailView(
                 )
 
                 # --------------------------------------------
-                # LOCK OLD ACCOUNT
+                # LOCK OLD ACCOUNT SEPARATELY
                 # --------------------------------------------
 
                 old_account = None
 
                 if old_account_id:
+
                     old_account = (
                         Account.objects
                         .select_for_update()
@@ -740,6 +754,7 @@ class ExpenseDetailView(
             )
 
         except Expense.DoesNotExist:
+
             return Response(
                 {
                     "error":
@@ -749,6 +764,7 @@ class ExpenseDetailView(
             )
 
         except Exception as e:
+
             return Response(
                 {
                     "error": str(e)
@@ -765,19 +781,26 @@ class ExpenseDetailView(
         try:
             with transaction.atomic():
 
+                # IMPORTANT:
+                # Lock ONLY the Expense row here.
+                # Do NOT use select_related("account").
                 expense = (
                     Expense.objects
                     .select_for_update()
-                    .select_related("account")
                     .get(
                         pk=kwargs["pk"],
                         user=request.user
                     )
                 )
 
+                # --------------------------------------------
+                # LOCK ACCOUNT SEPARATELY
+                # --------------------------------------------
+
                 account = None
 
                 if expense.account_id:
+
                     account = (
                         Account.objects
                         .select_for_update()
@@ -820,6 +843,7 @@ class ExpenseDetailView(
             )
 
         except Expense.DoesNotExist:
+
             return Response(
                 {
                     "error":
@@ -829,13 +853,13 @@ class ExpenseDetailView(
             )
 
         except Exception as e:
+
             return Response(
                 {
                     "error": str(e)
                 },
                 status=status.HTTP_400_BAD_REQUEST
             )
-
 
 # ============================================================
 # DASHBOARD SUMMARY
