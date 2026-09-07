@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Sparkles,
   PlusCircle,
@@ -74,10 +74,7 @@ const DEFAULT_SETTINGS = {
   appearance: 'Dark',
   language: 'English',
   dateFormat: 'DD/MM/YYYY',
-  startScreen: 'Dashboard',
-  paymentMethod: 'UPI',
-  recurringExpenses: false,
-  taxGst: false
+  startScreen: 'Dashboard'
 };
 
 const CATEGORY_ICONS = {
@@ -361,15 +358,7 @@ function Modal({ children, onClose, width = 360 }) {
 ========================================================= */
 
 export default function Dashboard() {
-  const [activeTab, setActiveTab] = useState(() => {
-    try {
-      const saved = localStorage.getItem('smart_expense_settings');
-      const start = saved ? JSON.parse(saved)?.startScreen : 'Dashboard';
-      if (start === 'Ledger') return 'transactions';
-      if (start === 'Profile') return 'profile';
-    } catch {}
-    return 'home';
-  });
+  const [activeTab, setActiveTab] = useState('home');
 
   const [isOcrModalOpen, setIsOcrModalOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -450,10 +439,54 @@ export default function Dashboard() {
   ]);
 
   const [activeSettingsModal, setActiveSettingsModal] = useState(null);
-  const [showBudgetModal, setShowBudgetModal] = useState(false);
-  const [budgetDraft, setBudgetDraft] = useState('');
-  const [budgetSaving, setBudgetSaving] = useState(false);
-  const [feedbackText, setFeedbackText] = useState('');
+
+  /* =======================================================
+     ADDITIVE INTERNAL NAVIGATION
+     Keeps the existing dashboard intact and adds one-step back.
+  ======================================================= */
+  const tabHistoryRef = useRef(['home']);
+
+  const navigateTo = (tab) => {
+    if (tab === activeTab) return;
+    tabHistoryRef.current.push(tab);
+    setActiveTab(tab);
+    try {
+      window.history.pushState({ smartExpenseTab: tab }, '', window.location.href);
+    } catch (_) {}
+  };
+
+  const goBackInDashboard = () => {
+    if (isOcrModalOpen) {
+      setIsOcrModalOpen(false);
+      return true;
+    }
+    if (showSignOutConfirm) {
+      setShowSignOutConfirm(false);
+      return true;
+    }
+    if (showEditProfileModal) {
+      setShowEditProfileModal(false);
+      return true;
+    }
+    if (activeSettingsModal) {
+      setActiveSettingsModal(null);
+      return true;
+    }
+    if (tabHistoryRef.current.length > 1) {
+      tabHistoryRef.current.pop();
+      setActiveTab(tabHistoryRef.current[tabHistoryRef.current.length - 1] || 'home');
+      return true;
+    }
+    return false;
+  };
+
+  useEffect(() => {
+    const onPopState = () => {
+      goBackInDashboard();
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  });
 
   const currencySymbol = profile.currency || '₹';
 
@@ -492,7 +525,7 @@ export default function Dashboard() {
           username: res.data.username || 'User',
           email: res.data.email || '',
           currency: res.data.currency || '₹',
-          monthly_budget: Number(res.data.monthly_budget ?? 0)
+          monthly_budget: Number(res.data.monthly_budget) || 50000
         };
 
         setProfile(next);
@@ -564,51 +597,6 @@ export default function Dashboard() {
      PROFILE
   ======================================================= */
 
-  const openEditProfile = () => {
-    setEditUsername(profile.username || '');
-    setEditEmail(profile.email || '');
-    setEditCurrency(profile.currency || '₹');
-    setEditBudget(String(Number(profile.monthly_budget) || ''));
-    setShowEditProfileModal(true);
-  };
-
-  const openBudgetModal = () => {
-    setBudgetDraft(String(Number(profile.monthly_budget) || ''));
-    setShowBudgetModal(true);
-  };
-
-  const handleSaveBudget = async (e) => {
-    e.preventDefault();
-    const amount = Number(budgetDraft);
-    if (!Number.isFinite(amount) || amount < 0) return;
-
-    setBudgetSaving(true);
-    const nextProfile = { ...profile, monthly_budget: amount };
-    setProfile(nextProfile);
-
-    try {
-      const res = await api.put('/api/profile/', {
-        username: profile.username,
-        email: profile.email,
-        currency: profile.currency,
-        monthly_budget: amount
-      });
-      if (res.data) {
-        setProfile((prev) => ({
-          ...prev,
-          monthly_budget: Number(res.data.monthly_budget ?? amount)
-        }));
-      }
-    } catch (err) {
-      console.warn('Budget saved locally; server sync unavailable:', err);
-    } finally {
-      setBudgetSaving(false);
-      setShowBudgetModal(false);
-    }
-  };
-
-  const openSettingsAction = (modal) => setActiveSettingsModal(modal);
-
   const handleUpdateProfile = async (e) => {
     e.preventDefault();
 
@@ -619,7 +607,7 @@ export default function Dashboard() {
         username: editUsername.trim(),
         email: editEmail.trim(),
         currency: editCurrency,
-        monthly_budget: Number(editBudget) || 0
+        monthly_budget: Number(editBudget) || 50000
       });
 
       setProfile({
@@ -627,20 +615,17 @@ export default function Dashboard() {
         email: res.data.email || editEmail,
         currency: res.data.currency || editCurrency,
         monthly_budget:
-          Number(res.data.monthly_budget ?? Number(editBudget) ?? 0)
+          Number(res.data.monthly_budget) ||
+          Number(editBudget) ||
+          50000
       });
 
       setShowEditProfileModal(false);
     } catch (err) {
-      // Keep the profile usable even when the API is temporarily unavailable.
-      setProfile({
-        username: editUsername.trim() || 'User',
-        email: editEmail.trim(),
-        currency: editCurrency || '₹',
-        monthly_budget: Number(editBudget) || 0
-      });
-      console.warn('Profile saved locally; server sync unavailable:', err);
-      setShowEditProfileModal(false);
+      alert(
+        err.response?.data?.error ||
+          'Failed to update profile.'
+      );
     } finally {
       setProfileSaving(false);
     }
@@ -696,7 +681,7 @@ export default function Dashboard() {
       setErrorMessage(
         'Please enter a valid amount and description.'
       );
-      return;
+      return false;
     }
 
     setSubmitting(true);
@@ -767,31 +752,55 @@ export default function Dashboard() {
       }
 
       await loadLedger();
+      return true;
     } catch (err) {
       setErrorMessage(
         err.response?.data?.error ||
+          err.response?.data?.detail ||
           'Unable to record transaction.'
       );
+      return false;
     } finally {
       setSubmitting(false);
     }
   };
 
-  const handleDelete = async (id) => {
-    const oldExpenses = expenses;
+ const handleDelete = async (id) => {
+  if (!id) {
+    alert('Invalid transaction.');
+    return;
+  }
 
-    setExpenses((prev) =>
-      prev.filter((item) => item.id !== id)
-    );
+  const confirmed = window.confirm(
+    'Are you sure you want to delete this expense?'
+  );
 
-    try {
-      await api.delete(`/api/expenses/${id}/`);
-      await loadLedger();
-    } catch (err) {
-      setExpenses(oldExpenses);
-      alert('Unable to delete this transaction.');
-    }
-  };
+  if (!confirmed) return;
+
+  const oldExpenses = expenses;
+
+  // Remove from UI immediately
+  setExpenses((prev) =>
+    prev.filter((item) => String(item.id) !== String(id))
+  );
+
+  try {
+    await api.delete(`/api/expenses/${id}/`);
+
+    // Refresh expenses + dashboard totals
+    await loadLedger();
+  } catch (err) {
+    // Restore if API delete failed
+    setExpenses(oldExpenses);
+
+    const message =
+      err.response?.data?.error ||
+      err.response?.data?.detail ||
+      'Unable to delete this transaction.';
+
+    alert(message);
+  }
+};
 
   /* =======================================================
      COMPUTED DATA
@@ -821,43 +830,6 @@ export default function Dashboard() {
 
     return entries.sort((a, b) => b[1] - a[1])[0];
   }, [categoryStats]);
-
-  // Analytics data — derived from the same real transactions already loaded by the dashboard.
-  const monthlyStats = useMemo(() => {
-    const now = new Date();
-    const months = [];
-
-    for (let i = 5; i >= 0; i -= 1) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      months.push({
-        key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`,
-        label: d.toLocaleDateString('en-US', { month: 'short' }),
-        income: 0,
-        expense: 0
-      });
-    }
-
-    const byKey = Object.fromEntries(months.map((m) => [m.key, m]));
-
-    expenses.forEach((tx) => {
-      const d = new Date(tx.date || tx.created_at || '');
-      if (Number.isNaN(d.getTime())) return;
-
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-      if (!byKey[key]) return;
-
-      const amount = Number(tx.amount) || 0;
-      if (tx.transaction_type === 'INCOME') byKey[key].income += amount;
-      if (tx.transaction_type === 'EXPENSE') byKey[key].expense += amount;
-    });
-
-    return months;
-  }, [expenses]);
-
-  const analyticsMax = useMemo(() => {
-    const values = monthlyStats.flatMap((m) => [m.income, m.expense]);
-    return Math.max(...values, 1);
-  }, [monthlyStats]);
 
   const filteredTransactions = useMemo(() => {
     const query = searchQuery.toLowerCase();
@@ -959,14 +931,11 @@ export default function Dashboard() {
     currencySymbol
   ]);
 
-  // React component names must start with an uppercase letter.
-  const InsightIcon = smartInsight.icon;
-
   /* =======================================================
      CSV EXPORT
   ======================================================= */
 
-  const exportCSV = () => {
+  const exportCSV = async () => {
     if (!expenses.length) {
       alert('There are no transactions to export.');
       return;
@@ -994,35 +963,43 @@ export default function Dashboard() {
       item.notes || ''
     ]);
 
-    const csv = [
-      headers,
-      ...rows
-    ]
+    const csv = [headers, ...rows]
       .map((row) =>
         row
-          .map((value) =>
-            `"${String(value).replace(/"/g, '""')}"`
-          )
+          .map((value) => `"${String(value).replace(/"/g, '""')}"`)
           .join(',')
       )
       .join('\n');
 
-    const blob = new Blob([csv], {
-      type: 'text/csv;charset=utf-8;'
-    });
+    const filename = `smart-expense-${new Date().toISOString().slice(0, 10)}.csv`;
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
 
-    const url = URL.createObjectURL(blob);
+    /* Android-friendly share first; normal download remains the fallback. */
+    try {
+      if (navigator.share && typeof File !== 'undefined') {
+        const file = new File([blob], filename, { type: 'text/csv' });
+        if (!navigator.canShare || navigator.canShare({ files: [file] })) {
+          await navigator.share({ title: 'Smart Expense CSV', files: [file] });
+          return;
+        }
+      }
+    } catch (err) {
+      if (err && err.name === 'AbortError') return;
+    }
 
-    const a = document.createElement('a');
-
-    a.href = url;
-    a.download = `smart-expense-${new Date()
-      .toISOString()
-      .slice(0, 10)}.csv`;
-
-    a.click();
-
-    URL.revokeObjectURL(url);
+    try {
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      link.rel = 'noopener';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1500);
+    } catch (_) {
+      alert('Export could not be started on this device.');
+    }
   };
 
   /* =======================================================
@@ -1031,7 +1008,6 @@ export default function Dashboard() {
 
   const renderHeader = () => (
     <header
-      className="smart-expense-header"
       style={{
         position: 'sticky',
         top: 0,
@@ -1040,13 +1016,12 @@ export default function Dashboard() {
         backdropFilter: 'blur(24px)',
         borderBottom:
           '1px solid rgba(255,255,255,0.06)',
-        padding: '34px 18px 13px'
+        padding: '13px 18px'
       }}
     >
       <div
-        className="smart-expense-header-inner"
         style={{
-          maxWidth: 720,
+          maxWidth: 520,
           margin: '0 auto',
           display: 'flex',
           alignItems: 'center',
@@ -1513,7 +1488,7 @@ export default function Dashboard() {
               flex: '0 0 auto'
             }}
           >
-            <InsightIcon
+            <smartInsight.icon
               size={19}
               color="#fff"
             />
@@ -1601,7 +1576,7 @@ export default function Dashboard() {
               label: 'Expense',
               icon: PlusCircle,
               action: () => {
-                setActiveTab('add');
+                navigateTo('add');
                 setEntryType('EXPENSE');
               }
             },
@@ -1609,7 +1584,7 @@ export default function Dashboard() {
               label: 'Income',
               icon: CircleDollarSign,
               action: () => {
-                setActiveTab('add');
+                navigateTo('add');
                 setEntryType('INCOME');
               }
             },
@@ -1617,7 +1592,7 @@ export default function Dashboard() {
               label: 'Ledger',
               icon: ArrowRightLeft,
               action: () =>
-                setActiveTab('transactions')
+                navigateTo('transactions')
             }
           ].map((item) => (
             <button
@@ -1845,7 +1820,7 @@ export default function Dashboard() {
 
           <button
             onClick={() =>
-              setActiveTab('transactions')
+              navigateTo('transactions')
             }
             style={{
               border: 'none',
@@ -2705,152 +2680,159 @@ export default function Dashboard() {
   ======================================================= */
 
   const renderAnalytics = () => {
-    const categoryEntries = Object.entries(categoryStats).sort((a, b) => b[1] - a[1]);
-    const topFive = categoryEntries.slice(0, 5);
-    const pieTotal = topFive.reduce((sum, [, value]) => sum + value, 0);
-    const pieStops = (() => {
-      let cursor = 0;
-      return topFive.map(([category, value]) => {
-        const start = cursor;
-        cursor += pieTotal > 0 ? (value / pieTotal) * 100 : 0;
-        return `${getCategoryColor(category)} ${start}% ${cursor}%`;
+    const expenseRows = Object.entries(categoryStats).sort((a, b) => b[1] - a[1]);
+    const totalCategorySpend = expenseRows.reduce((sum, item) => sum + Number(item[1] || 0), 0);
+    const maxCategory = expenseRows.length ? Math.max(...expenseRows.map((item) => Number(item[1] || 0))) : 1;
+
+    const monthly = Array.from({ length: 6 }, (_, index) => {
+      const d = new Date();
+      d.setMonth(d.getMonth() - (5 - index));
+      const year = d.getFullYear();
+      const month = d.getMonth();
+      let income = 0;
+      let expense = 0;
+      expenses.forEach((tx) => {
+        const date = new Date(tx.date || tx.created_at || '');
+        if (Number.isNaN(date.getTime())) return;
+        if (date.getFullYear() !== year || date.getMonth() !== month) return;
+        const amount = Number(tx.amount) || 0;
+        if (tx.transaction_type === 'INCOME') income += amount;
+        else expense += amount;
       });
-    })();
+      return {
+        label: d.toLocaleDateString('en-IN', { month: 'short' }),
+        income,
+        expense
+      };
+    });
+
+    const maxMonthly = Math.max(1, ...monthly.map((m) => Math.max(m.income, m.expense)));
+    const chartW = 320;
+    const chartH = 150;
+    const pad = 22;
+    const xFor = (i) => pad + (i * (chartW - pad * 2)) / Math.max(1, monthly.length - 1);
+    const yFor = (v) => chartH - pad - (v / maxMonthly) * (chartH - pad * 2);
+    const incomePoints = monthly.map((m, i) => `${xFor(i)},${yFor(m.income)}`).join(' ');
+    const expensePoints = monthly.map((m, i) => `${xFor(i)},${yFor(m.expense)}`).join(' ');
 
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         <div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 10 }}>
-            <div>
-              <h2 style={{ margin: 0, fontSize: 22, fontWeight: 900 }}>Analytics</h2>
-              <p style={{ margin: '5px 0 0', fontSize: 10, color: 'rgba(235,235,245,0.42)' }}>Visual insights from your real transactions</p>
-            </div>
-            <div style={{ fontSize: 9, color: 'rgba(235,235,245,0.4)' }}>Last 6 months</div>
-          </div>
+          <h2 style={{ margin: 0, fontSize: 21, fontWeight: 850 }}>Analytics</h2>
+          <p style={{ margin: '4px 0', fontSize: 10, color: 'rgba(235,235,245,0.42)' }}>
+            Visual tracking of your real recorded transactions
+          </p>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 9 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 9 }}>
           {[
             ['Total Spending', money(summary.total_expenses, currencySymbol), '#FF453A'],
             ['Total Income', money(summary.total_income, currencySymbol), '#30D158'],
             ['Budget Used', `${budgetPct}%`, '#0A84FF'],
             ['Top Category', topCategory ? topCategory[0] : '—', '#BF5AF2']
           ].map(([title, value, color]) => (
-            <GlassCard key={title} style={{ padding: 14 }}>
-              <div style={{ fontSize: 9, color: 'rgba(235,235,245,0.42)', fontWeight: 750 }}>{title}</div>
-              <div style={{ marginTop: 6, fontSize: 15, fontWeight: 900, color, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{value}</div>
+            <GlassCard key={title} style={{ padding: 15 }}>
+              <div style={{ fontSize: 9, color: 'rgba(235,235,245,0.42)', fontWeight: 700 }}>{title}</div>
+              <div style={{ marginTop: 7, fontSize: 15, fontWeight: 850, color }}>{value}</div>
             </GlassCard>
           ))}
         </div>
 
         <GlassCard style={{ padding: 16 }}>
-          <SectionTitle icon={TrendingUp} title="Income vs Expenses" subtitle="Monthly cash-flow trend" />
-          {expenses.length === 0 ? (
-            <div style={{ padding: '30px 8px', textAlign: 'center', color: 'rgba(235,235,245,0.4)', fontSize: 11 }}>Add transactions to unlock your trend chart.</div>
-          ) : (
-            <div style={{ marginTop: 14 }}>
-              <div style={{ height: 170, display: 'flex', alignItems: 'flex-end', gap: 7, borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: 4 }}>
-                {monthlyStats.map((m) => (
-                  <div key={m.key} style={{ flex: 1, height: '100%', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: 3 }}>
-                    <div title={`Income ${money(m.income, currencySymbol)}`} style={{ width: '34%', height: `${Math.max((m.income / analyticsMax) * 100, m.income ? 4 : 1)}%`, minHeight: 2, borderRadius: '6px 6px 2px 2px', background: 'linear-gradient(180deg,#30D158,#159447)' }} />
-                    <div title={`Expenses ${money(m.expense, currencySymbol)}`} style={{ width: '34%', height: `${Math.max((m.expense / analyticsMax) * 100, m.expense ? 4 : 1)}%`, minHeight: 2, borderRadius: '6px 6px 2px 2px', background: 'linear-gradient(180deg,#FF453A,#b92b25)' }} />
-                  </div>
-                ))}
-              </div>
-              <div style={{ display: 'flex', gap: 7, marginTop: 7 }}>
-                {monthlyStats.map((m) => <div key={m.key} style={{ flex: 1, textAlign: 'center', fontSize: 8.5, color: 'rgba(235,235,245,0.42)' }}>{m.label}</div>)}
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'center', gap: 15, marginTop: 12, fontSize: 9, color: 'rgba(235,235,245,0.5)' }}>
-                <span><i style={{ display: 'inline-block', width: 7, height: 7, borderRadius: 2, background: '#30D158', marginRight: 5 }} />Income</span>
-                <span><i style={{ display: 'inline-block', width: 7, height: 7, borderRadius: 2, background: '#FF453A', marginRight: 5 }} />Expenses</span>
-              </div>
-            </div>
-          )}
+          <SectionTitle icon={BarChart3} title="Income vs Expenses" subtitle="Last 6 months" />
+          <div style={{ width: '100%', overflowX: 'auto' }}>
+            <svg viewBox={`0 0 ${chartW} ${chartH + 28}`} width="100%" height="190" role="img" aria-label="Income and expense chart">
+              {[0, 0.5, 1].map((ratio) => (
+                <line key={ratio} x1={pad} x2={chartW - pad} y1={yFor(maxMonthly * ratio)} y2={yFor(maxMonthly * ratio)} stroke="rgba(255,255,255,0.08)" strokeWidth="1" />
+              ))}
+              <polyline points={incomePoints} fill="none" stroke="#30D158" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+              <polyline points={expensePoints} fill="none" stroke="#FF453A" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+              {monthly.map((m, i) => (
+                <g key={m.label + i}>
+                  <circle cx={xFor(i)} cy={yFor(m.income)} r="3.5" fill="#30D158" />
+                  <circle cx={xFor(i)} cy={yFor(m.expense)} r="3.5" fill="#FF453A" />
+                  <text x={xFor(i)} y={chartH + 17} textAnchor="middle" fill="rgba(235,235,245,0.45)" fontSize="9">{m.label}</text>
+                </g>
+              ))}
+            </svg>
+          </div>
+          <div style={{ display: 'flex', gap: 16, fontSize: 9.5, color: 'rgba(235,235,245,0.55)' }}>
+            <span><b style={{ color: '#30D158' }}>●</b> Income</span>
+            <span><b style={{ color: '#FF453A' }}>●</b> Expenses</span>
+          </div>
         </GlassCard>
 
         <GlassCard style={{ padding: 16 }}>
-          <SectionTitle icon={PieChart} title="Spending by Category" subtitle="Your biggest expense areas" />
-          {topFive.length === 0 ? (
-            <div style={{ padding: '30px 8px', textAlign: 'center', color: 'rgba(235,235,245,0.4)', fontSize: 11 }}>No expense data available yet.</div>
-          ) : (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 18, marginTop: 14 }}>
-              <div style={{ width: 132, height: 132, borderRadius: '50%', flexShrink: 0, background: `conic-gradient(${pieStops.join(',')})`, position: 'relative', boxShadow: '0 0 28px rgba(10,132,255,0.12)' }}>
-                <div style={{ position: 'absolute', inset: 29, borderRadius: '50%', background: '#0b0f17', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', border: '1px solid rgba(255,255,255,0.05)' }}>
-                  <span style={{ fontSize: 8, color: 'rgba(235,235,245,0.42)' }}>TOTAL</span>
-                  <b style={{ fontSize: 11, marginTop: 3 }}>{money(expenseTotal, currencySymbol)}</b>
+          <SectionTitle icon={PieChart} title="Category Spending" subtitle="Where your recorded expenses go" />
+          {expenseRows.length ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
+              <div style={{ width: 132, height: 132, flex: '0 0 132px', borderRadius: '50%', background: `conic-gradient(${expenseRows.map((item, i) => {
+                const colors = ['#0A84FF', '#30D158', '#FF9F0A', '#BF5AF2', '#FF453A', '#64D2FF', '#FFD60A'];
+                const start = expenseRows.slice(0, i).reduce((sum, x) => sum + Number(x[1] || 0), 0) / totalCategorySpend * 360;
+                const end = (expenseRows.slice(0, i + 1).reduce((sum, x) => sum + Number(x[1] || 0), 0) / totalCategorySpend) * 360;
+                return `${colors[i % colors.length]} ${start}deg ${end}deg`;
+              }).join(',')})`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div style={{ width: 82, height: 82, borderRadius: '50%', background: '#111621', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                  <div style={{ fontSize: 9, color: 'rgba(235,235,245,0.45)' }}>TOTAL</div>
+                  <div style={{ fontSize: 11, fontWeight: 850 }}>{money(totalCategorySpend, currencySymbol)}</div>
                 </div>
               </div>
-              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 9 }}>
-                {topFive.map(([category, amount]) => {
-                  const pct = pieTotal > 0 ? Math.round((amount / pieTotal) * 100) : 0;
+              <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {expenseRows.slice(0, 6).map(([category, amount], i) => {
+                  const colors = ['#0A84FF', '#30D158', '#FF9F0A', '#BF5AF2', '#FF453A', '#64D2FF', '#FFD60A'];
+                  const pct = totalCategorySpend ? Math.round((Number(amount) / totalCategorySpend) * 100) : 0;
                   return (
-                    <div key={category} style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 9.5 }}>
-                      <span style={{ width: 8, height: 8, borderRadius: 3, background: getCategoryColor(category), flexShrink: 0 }} />
-                      <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{category}</span>
+                    <div key={category} style={{ display: 'grid', gridTemplateColumns: '9px 1fr auto', alignItems: 'center', gap: 7, fontSize: 9.5 }}>
+                      <span style={{ width: 8, height: 8, borderRadius: 3, background: colors[i % colors.length] }} />
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{category}</span>
                       <b>{pct}%</b>
                     </div>
                   );
                 })}
               </div>
             </div>
-          )}
-        </GlassCard>
-
-        <GlassCard style={{ padding: 16 }}>
-          <SectionTitle icon={BarChart3} title="Category Analysis" subtitle="Compare your recorded expenses" />
-          {categoryEntries.length === 0 ? (
-            <div style={{ padding: '24px 8px', textAlign: 'center', color: 'rgba(235,235,245,0.4)', fontSize: 11 }}>Nothing to analyse yet.</div>
           ) : (
-            categoryEntries.slice(0, 8).map(([category, amount]) => {
-              const pct = expenseTotal > 0 ? Math.round((amount / expenseTotal) * 100) : 0;
-              return (
-                <div key={category} style={{ marginTop: 12 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, fontSize: 9.5 }}>
-                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{category}</span>
-                    <b style={{ whiteSpace: 'nowrap' }}>{money(amount, currencySymbol)} · {pct}%</b>
-                  </div>
-                  <div style={{ height: 7, marginTop: 6, background: 'rgba(255,255,255,0.06)', borderRadius: 20, overflow: 'hidden' }}>
-                    <div style={{ width: `${pct}%`, height: '100%', background: getCategoryColor(category), borderRadius: 20, transition: 'width .4s ease' }} />
-                  </div>
-                </div>
-              );
-            })
+            <div style={{ padding: 28, textAlign: 'center', fontSize: 10, color: 'rgba(235,235,245,0.4)' }}>Add expenses to see your category chart.</div>
           )}
         </GlassCard>
 
         <GlassCard style={{ padding: 16 }}>
-          <SectionTitle icon={Wallet} title="Budget Health" subtitle="How much of your monthly limit is used" />
-          <div style={{ marginTop: 15, height: 12, borderRadius: 20, background: 'rgba(255,255,255,0.07)', overflow: 'hidden' }}>
-            <div style={{ width: `${budgetPct}%`, height: '100%', borderRadius: 20, background: budgetPct >= 90 ? '#FF453A' : budgetPct >= 70 ? '#FF9F0A' : '#30D158', transition: 'width .45s ease' }} />
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, fontSize: 9.5, color: 'rgba(235,235,245,0.5)' }}>
-            <span>Spent {money(expenseTotal, currencySymbol)}</span>
-            <b style={{ color: budgetPct >= 90 ? '#FF453A' : '#30D158' }}>{budget > 0 ? `${budgetPct}% used` : 'Set a budget'}</b>
-            <span>Budget {money(budget, currencySymbol)}</span>
-          </div>
+          <SectionTitle icon={TrendingUp} title="Category Tracking" subtitle="Actual spending by category" />
+          {expenseRows.length ? expenseRows.slice(0, 8).map(([category, amount]) => (
+            <div key={category} style={{ marginTop: 12 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9.5, marginBottom: 6 }}>
+                <span>{CATEGORY_ICONS[category] || '•'} {category}</span>
+                <b>{money(amount, currencySymbol)}</b>
+              </div>
+              <div style={{ height: 8, borderRadius: 10, background: 'rgba(255,255,255,0.07)', overflow: 'hidden' }}>
+                <div style={{ width: `${Math.max(3, Math.round((Number(amount) / maxCategory) * 100))}%`, height: '100%', borderRadius: 10, background: getCategoryColor(category), transition: 'width .35s ease' }} />
+              </div>
+            </div>
+          )) : (
+            <div style={{ padding: 20, textAlign: 'center', fontSize: 10, color: 'rgba(235,235,245,0.4)' }}>No expense data yet.</div>
+          )}
         </GlassCard>
 
         <GlassCard style={{ padding: 16 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
-            <div style={{ width: 42, height: 42, borderRadius: 14, background: 'rgba(10,132,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <BrainCircuit size={19} color="#0A84FF" />
-            </div>
-            <div>
-              <div style={{ fontSize: 12, fontWeight: 850 }}>Smart Analysis</div>
-              <div style={{ marginTop: 3, fontSize: 9.5, lineHeight: 1.45, color: 'rgba(235,235,245,0.42)' }}>Charts are calculated from your actual recorded transactions and update automatically when new expenses or income are added.</div>
-            </div>
+          <SectionTitle icon={Wallet} title="Budget Health" subtitle="Current recorded spending against your budget" />
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10 }}>
+            <span>Spent <b>{money(expenseTotal, currencySymbol)}</b></span>
+            <span style={{ color: 'rgba(235,235,245,0.45)' }}>Budget <b>{budget ? money(budget, currencySymbol) : 'Not set'}</b></span>
+          </div>
+          <div style={{ height: 10, marginTop: 10, borderRadius: 20, background: 'rgba(255,255,255,0.07)', overflow: 'hidden' }}>
+            <div style={{ width: `${budget ? Math.min(100, Math.round((expenseTotal / budget) * 100)) : 0}%`, height: '100%', borderRadius: 20, background: budgetPct >= 90 ? '#FF453A' : '#0A84FF' }} />
+          </div>
+          <div style={{ marginTop: 8, fontSize: 9.5, color: 'rgba(235,235,245,0.45)' }}>
+            {budget ? `${budgetPct}% used • ${money(remainingBudget, currencySymbol)} remaining` : 'Set a monthly budget from Profile → Edit.'}
           </div>
         </GlassCard>
       </div>
     );
   };
 
-
-
   /* =======================================================
      PROFILE
   ======================================================= */
-
 
   const renderProfile = () => (
     <div
@@ -2967,7 +2949,9 @@ export default function Dashboard() {
           </div>
 
           <button
-            onClick={openEditProfile}
+            onClick={() =>
+              setShowEditProfileModal(true)
+            }
             style={{
               border:
                 '1px solid rgba(255,255,255,0.08)',
@@ -3183,14 +3167,16 @@ export default function Dashboard() {
               budget,
               currencySymbol
             )}
-            onClick={openBudgetModal}
+            onClick={() =>
+              setShowEditProfileModal(true)
+            }
           />
 
           <SettingRow
             icon={CreditCard}
             title="Payment Methods"
             description="UPI, Card, Cash and Bank"
-            value={settings.paymentMethod || 'UPI'}
+            value="Manage"
             onClick={() =>
               setActiveSettingsModal(
                 'payment'
@@ -3202,16 +3188,24 @@ export default function Dashboard() {
             icon={RotateCcw}
             title="Recurring Expenses"
             description="Manage recurring payment reminders"
-            value={settings.recurringExpenses ? 'On' : 'Off'}
-            onClick={() => openSettingsAction('recurring')}
+            value="Coming soon"
+            onClick={() =>
+              alert(
+                'Recurring expense management can be connected to the backend next.'
+              )
+            }
           />
 
           <SettingRow
             icon={FileText}
             title="Tax / GST"
             description="Configure tax-related preferences"
-            value={settings.taxGst ? 'On' : 'Off'}
-            onClick={() => openSettingsAction('tax')}
+            value="Configure"
+            onClick={() =>
+              alert(
+                'Tax / GST configuration is ready for backend integration.'
+              )
+            }
           />
         </GlassCard>
       </div>
@@ -3327,7 +3321,7 @@ export default function Dashboard() {
             description="Review transactions created from receipts"
             value="Ledger"
             onClick={() =>
-              setActiveTab('transactions')
+              navigateTo('transactions')
             }
           />
 
@@ -3466,7 +3460,7 @@ export default function Dashboard() {
             description="Review current month financial data"
             value="Analytics"
             onClick={() =>
-              setActiveTab('analytics')
+              navigateTo('analytics')
             }
           />
 
@@ -3476,7 +3470,7 @@ export default function Dashboard() {
             description="Analyze spending categories"
             value="Open"
             onClick={() =>
-              setActiveTab('analytics')
+              navigateTo('analytics')
             }
           />
 
@@ -3492,8 +3486,7 @@ export default function Dashboard() {
             icon={FileText}
             title="PDF Report"
             description="PDF generator is not connected yet"
-            value="Print / PDF"
-            onClick={() => window.print()}
+            value="Coming soon"
           />
         </GlassCard>
       </div>
@@ -3527,7 +3520,9 @@ export default function Dashboard() {
             toggle
             checked={settings.biometrics}
             onClick={() =>
-              updateSetting('biometrics', !settings.biometrics)
+              alert(
+                'Biometric authentication requires native device integration.'
+              )
             }
           />
 
@@ -3535,8 +3530,7 @@ export default function Dashboard() {
             icon={Smartphone}
             title="Active Devices"
             description="Device management"
-            value="1 device"
-            onClick={() => openSettingsAction('devices')}
+            value="Coming soon"
           />
 
           <SettingRow
@@ -3713,28 +3707,44 @@ export default function Dashboard() {
             title="Help Center"
             description="Learn how to use Smart Expense"
             value="Open"
-            onClick={() => openSettingsAction('help')}
+            onClick={() =>
+              alert(
+                'Help Center will be connected here.'
+              )
+            }
           />
 
           <SettingRow
             icon={FileText}
             title="Frequently Asked Questions"
             value="View"
-            onClick={() => openSettingsAction('faq')}
+            onClick={() =>
+              alert(
+                'FAQ section will be connected here.'
+              )
+            }
           />
 
           <SettingRow
             icon={Settings}
             title="Report a Problem"
-            value="Open"
-            onClick={() => openSettingsAction('problem')}
+            value="Support"
+            onClick={() =>
+              alert(
+                'Support request flow will be connected here.'
+              )
+            }
           />
 
           <SettingRow
             icon={Sparkles}
             title="Send Feedback"
-            value="Send"
-            onClick={() => openSettingsAction('feedback')}
+            value="Feedback"
+            onClick={() =>
+              alert(
+                'Thank you for your feedback.'
+              )
+            }
           />
 
           <SettingRow
@@ -4048,14 +4058,10 @@ export default function Dashboard() {
               key={symbol}
               onClick={() => {
                 setEditCurrency(symbol);
-                setProfile((prev) => ({ ...prev, currency: symbol }));
-                updateSetting('currency', symbol);
-                api.put('/api/profile/', {
-                  username: profile.username,
-                  email: profile.email,
-                  currency: symbol,
-                  monthly_budget: Number(profile.monthly_budget) || 0
-                }).catch((err) => console.warn('Currency saved locally; server sync unavailable:', err));
+                updateSetting(
+                  'currency',
+                  symbol
+                );
                 close();
               }}
               style={{
@@ -4086,7 +4092,9 @@ export default function Dashboard() {
                 'rgba(235,235,245,0.4)'
             }}
           >
-            Currency updates immediately. The app also attempts to sync it with your profile.
+            Save your profile after changing
+            currency to persist it on the
+            server.
           </div>
         </Modal>
       );
@@ -4107,99 +4115,36 @@ export default function Dashboard() {
             Payment Methods
           </h3>
 
-          {['UPI', 'Card', 'Cash', 'Bank Transfer'].map((method) => (
-            <button
+          {[
+            'UPI',
+            'Card',
+            'Cash',
+            'Bank Transfer'
+          ].map((method) => (
+            <div
               key={method}
-              type="button"
-              onClick={() => updateSetting('paymentMethod', method)}
               style={{
-                width: '100%',
                 marginTop: 9,
                 padding: 13,
                 borderRadius: 13,
-                background: settings.paymentMethod === method ? 'rgba(10,132,255,0.14)' : 'rgba(255,255,255,0.04)',
-                border: settings.paymentMethod === method ? '1px solid rgba(10,132,255,0.4)' : '1px solid rgba(255,255,255,0.07)',
-                color: '#fff',
-                textAlign: 'left',
+                background:
+                  'rgba(255,255,255,0.04)',
+                border:
+                  '1px solid rgba(255,255,255,0.07)',
                 fontSize: 11,
-                fontWeight: 700,
-                cursor: 'pointer'
+                fontWeight: 700
               }}
             >
-              <CreditCard size={14} style={{ verticalAlign: 'middle', marginRight: 7 }} />
+              <CreditCard
+                size={14}
+                style={{
+                  verticalAlign: 'middle',
+                  marginRight: 7
+                }}
+              />
               {method}
-              {settings.paymentMethod === method && <span style={{ float: 'right', color: '#0A84FF' }}>✓</span>}
-            </button>
+            </div>
           ))}
-        </Modal>
-      );
-    }
-
-    if (activeSettingsModal === 'recurring') {
-      return (
-        <Modal onClose={close}>
-          <h3 style={{ margin: 0, fontSize: 16 }}>Recurring Expenses</h3>
-          <p style={{ fontSize: 10, color: 'rgba(235,235,245,0.5)', lineHeight: 1.5 }}>
-            Turn on recurring-payment reminders. This preference is saved on this device.
-          </p>
-          <button
-            type="button"
-            onClick={() => updateSetting('recurringExpenses', !settings.recurringExpenses)}
-            style={{ width: '100%', padding: 13, borderRadius: 13, border: '1px solid rgba(255,255,255,0.08)', background: settings.recurringExpenses ? 'rgba(10,132,255,0.15)' : 'rgba(255,255,255,0.04)', color: '#fff', fontWeight: 800, cursor: 'pointer' }}
-          >
-            {settings.recurringExpenses ? '✓ Reminders enabled' : 'Enable reminders'}
-          </button>
-        </Modal>
-      );
-    }
-
-    if (activeSettingsModal === 'tax') {
-      return (
-        <Modal onClose={close}>
-          <h3 style={{ margin: 0, fontSize: 16 }}>Tax / GST</h3>
-          <p style={{ fontSize: 10, color: 'rgba(235,235,245,0.5)', lineHeight: 1.5 }}>
-            Enable tax/GST tracking as a preference for future expense entries.
-          </p>
-          <button type="button" onClick={() => updateSetting('taxGst', !settings.taxGst)} style={{ width: '100%', padding: 13, borderRadius: 13, border: '1px solid rgba(255,255,255,0.08)', background: settings.taxGst ? 'rgba(10,132,255,0.15)' : 'rgba(255,255,255,0.04)', color: '#fff', fontWeight: 800, cursor: 'pointer' }}>
-            {settings.taxGst ? '✓ GST tracking enabled' : 'Enable GST tracking'}
-          </button>
-        </Modal>
-      );
-    }
-
-    if (activeSettingsModal === 'devices') {
-      return (
-        <Modal onClose={close}>
-          <h3 style={{ margin: 0, fontSize: 16 }}>Active Devices</h3>
-          <div style={{ marginTop: 12, padding: 14, borderRadius: 14, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}>
-            <div style={{ fontWeight: 800 }}>Current device</div>
-            <div style={{ marginTop: 4, fontSize: 10, color: 'rgba(235,235,245,0.48)' }}>This browser session is active.</div>
-          </div>
-        </Modal>
-      );
-    }
-
-    if (activeSettingsModal === 'help' || activeSettingsModal === 'faq' || activeSettingsModal === 'problem') {
-      const copy = {
-        help: ['Help Center', 'Use Scan to import a receipt, + Add to enter an expense manually, and Ledger to review your transactions.'],
-        faq: ['Frequently Asked Questions', 'Your settings are stored locally, while profile and transaction data are synchronized through the connected API when available.'],
-        problem: ['Report a Problem', 'If a button does not respond, restart the app after replacing Dashboard.jsx with the final file and verify that this page is the active Dashboard route.']
-      }[activeSettingsModal];
-      return (
-        <Modal onClose={close}>
-          <h3 style={{ margin: 0, fontSize: 16 }}>{copy[0]}</h3>
-          <p style={{ margin: '12px 0 0', fontSize: 10, lineHeight: 1.6, color: 'rgba(235,235,245,0.58)' }}>{copy[1]}</p>
-          <button type="button" onClick={close} style={{ width: '100%', marginTop: 14, padding: 13, border: 'none', borderRadius: 13, background: '#0A84FF', color: '#fff', fontWeight: 850, cursor: 'pointer' }}>Done</button>
-        </Modal>
-      );
-    }
-
-    if (activeSettingsModal === 'feedback') {
-      return (
-        <Modal onClose={close}>
-          <h3 style={{ margin: 0, fontSize: 16 }}>Send Feedback</h3>
-          <textarea value={feedbackText} onChange={(e) => setFeedbackText(e.target.value)} placeholder="Tell us what you want to improve…" rows={5} style={{ width: '100%', boxSizing: 'border-box', marginTop: 12, padding: 12, borderRadius: 13, border: '1px solid rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.045)', color: '#fff', resize: 'vertical', outline: 'none' }} />
-          <button type="button" onClick={() => { localStorage.setItem('smart_expense_feedback', feedbackText); setFeedbackText(''); close(); }} style={{ width: '100%', marginTop: 10, padding: 13, border: 'none', borderRadius: 13, background: '#0A84FF', color: '#fff', fontWeight: 850, cursor: 'pointer' }}>Save Feedback</button>
         </Modal>
       );
     }
@@ -4269,78 +4214,17 @@ export default function Dashboard() {
 
   return (
     <div
-      className="smart-expense-app"
       style={{
         width: '100%',
         minHeight: '100vh',
         background: '#05070A',
         color: '#fff',
         boxSizing: 'border-box',
-        paddingBottom: 140,
+        paddingBottom: 105,
         fontFamily:
           'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
       }}
     >
-      <style>{`
-        html, body, #root {
-          margin: 0 !important;
-          padding: 0 !important;
-          width: 100%;
-          min-height: 100%;
-          background: #05070A;
-        }
-        *, *::before, *::after { box-sizing: border-box; }
-        body { overflow-x: hidden; }
-        button, input, select, textarea { font: inherit; }
-        .smart-expense-app {
-          width: 100%;
-          max-width: 100%;
-          overflow-x: clip;
-        }
-        .smart-expense-header {
-          padding-top: max(34px, env(safe-area-inset-top, 0px));
-        }
-        .smart-expense-header-inner {
-          width: min(100%, 720px);
-        }
-        .smart-expense-main {
-          width: min(100%, 720px) !important;
-          padding: 22px 20px 190px !important;
-        }
-        .smart-expense-bottom-nav {
-          width: min(calc(100% - 24px), 620px) !important;
-          bottom: max(18px, env(safe-area-inset-bottom, 0px)) !important;
-          height: 70px !important;
-          padding: 7px 18px !important;
-        }
-        .smart-expense-bottom-nav button {
-          flex: 1 1 0;
-          min-width: 0 !important;
-          min-height: 50px;
-          -webkit-tap-highlight-color: transparent;
-        }
-        @media (max-width: 560px) {
-          .smart-expense-header { padding: 32px 14px 12px !important; }
-          .smart-expense-header-inner { gap: 8px; }
-          .smart-expense-header-inner > div:first-child { min-width: 0; }
-          .smart-expense-header-inner > div:first-child > div:last-child { min-width: 0; }
-          .smart-expense-header-inner > div:first-child > div:last-child > div:first-child { white-space: nowrap; }
-          .smart-expense-header-inner > div:last-child { flex-shrink: 0; }
-          .smart-expense-main { padding: 20px 14px 190px !important; }
-          .smart-expense-bottom-nav {
-            width: calc(100% - 20px) !important;
-            height: 68px !important;
-            padding: 6px 10px !important;
-            border-radius: 24px !important;
-          }
-        }
-        @media (min-width: 721px) {
-          .smart-expense-app {
-            background: #05070A;
-          }
-        }
-      `}</style>
-
       {/* Premium background */}
       <div
         style={{
@@ -4361,14 +4245,13 @@ export default function Dashboard() {
       {renderHeader()}
 
       <main
-        className="smart-expense-main"
         style={{
           position: 'relative',
           zIndex: 1,
           width: '100%',
-          maxWidth: 720,
+          maxWidth: 520,
           margin: '0 auto',
-          padding: '22px 16px 190px',
+          padding: '17px 16px 25px',
           boxSizing: 'border-box'
         }}
       >
@@ -4579,24 +4462,6 @@ export default function Dashboard() {
         </Modal>
       )}
 
-      {/* MONTHLY BUDGET */}
-      {showBudgetModal && (
-        <Modal onClose={() => setShowBudgetModal(false)} width={360}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div>
-              <h3 style={{ margin: 0, fontSize: 17 }}>Monthly Budget</h3>
-              <p style={{ margin: '4px 0 0', fontSize: 9.5, color: 'rgba(235,235,245,0.45)' }}>Set the exact limit you want to use each month.</p>
-            </div>
-            <button type="button" onClick={() => setShowBudgetModal(false)} style={{ border: 'none', background: 'none', color: '#fff', cursor: 'pointer' }}><X size={17} /></button>
-          </div>
-          <form onSubmit={handleSaveBudget} style={{ marginTop: 18 }}>
-            <label style={{ display: 'block', fontSize: 9, color: 'rgba(235,235,245,0.45)', marginBottom: 6 }}>BUDGET AMOUNT ({currencySymbol})</label>
-            <input autoFocus required min="0" type="number" step="0.01" value={budgetDraft} onChange={(e) => setBudgetDraft(e.target.value)} placeholder="Enter monthly budget" style={{ width: '100%', boxSizing: 'border-box', padding: 14, borderRadius: 13, border: '1px solid rgba(10,132,255,0.35)', background: 'rgba(255,255,255,0.045)', color: '#fff', fontSize: 18, fontWeight: 850, outline: 'none' }} />
-            <button disabled={budgetSaving} type="submit" style={{ width: '100%', marginTop: 12, padding: 13, border: 'none', borderRadius: 13, background: '#0A84FF', color: '#fff', fontWeight: 850, cursor: 'pointer' }}>{budgetSaving ? 'Saving…' : 'Save Monthly Budget'}</button>
-          </form>
-        </Modal>
-      )}
-
       {/* SIGN OUT */}
       {showSignOutConfirm && (
         <Modal
@@ -4709,17 +4574,16 @@ export default function Dashboard() {
 
       {/* BOTTOM NAVIGATION */}
       <nav
-        className="smart-expense-bottom-nav"
         style={{
           position: 'fixed',
           left: '50%',
           bottom:
-            'max(18px, env(safe-area-inset-bottom, 0px))',
+            'max(12px, env(safe-area-inset-bottom, 12px))',
           transform:
             'translateX(-50%)',
-          width: 'calc(100% - 24px)',
-          maxWidth: 620,
-          height: 72,
+          width: 'calc(100% - 28px)',
+          maxWidth: 420,
+          height: 65,
           boxSizing: 'border-box',
           padding: '6px 13px',
           borderRadius: 27,
@@ -4739,7 +4603,7 @@ export default function Dashboard() {
       >
         <button
           onClick={() =>
-            setActiveTab('home')
+            navigateTo('home')
           }
           style={{
             border: 'none',
@@ -4769,7 +4633,7 @@ export default function Dashboard() {
 
         <button
           onClick={() =>
-            setActiveTab('transactions')
+            navigateTo('transactions')
           }
           style={{
             border: 'none',
@@ -4829,7 +4693,7 @@ export default function Dashboard() {
 
         <button
           onClick={() =>
-            setActiveTab('add')
+            navigateTo('add')
           }
           style={{
             border: 'none',
@@ -4859,7 +4723,7 @@ export default function Dashboard() {
 
         <button
           onClick={() =>
-            setActiveTab('profile')
+            navigateTo('profile')
           }
           style={{
             border: 'none',

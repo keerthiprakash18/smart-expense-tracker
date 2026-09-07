@@ -973,13 +973,7 @@ class ReceiptScanView(APIView):
                     )
 
             except Exception:
-                extracted_text = (
-                    f"PDF Invoice {filename} "
-                    f"Total: 1850.00 "
-                    f"GST: 280.00 "
-                    f"Date: "
-                    f"{datetime.now().strftime('%Y-%m-%d')}"
-                )
+                extracted_text = ""
 
         # ----------------------------------------------------
         # IMAGE OCR
@@ -988,31 +982,52 @@ class ReceiptScanView(APIView):
         else:
 
             try:
-                from PIL import Image, ImageEnhance
+                from PIL import Image, ImageEnhance, ImageFilter, ImageOps
                 import pytesseract
 
-                img = Image.open(
-                    file_obj
-                ).convert("L")
+                tesseract_cmd = os.environ.get("TESSERACT_CMD")
+                if tesseract_cmd:
+                    pytesseract.pytesseract.tesseract_cmd = tesseract_cmd
 
-                img = ImageEnhance.Contrast(
-                    img
-                ).enhance(1.8)
+                img = Image.open(file_obj).convert("RGB")
 
-                extracted_text = (
-                    pytesseract.image_to_string(
-                        img
-                    )
-                )
+                # Keep the original receipt readable and create several
+                # OCR-friendly versions. Different receipts work better
+                # with different thresholding/segmentation modes.
+                gray = ImageOps.grayscale(img)
+                gray = ImageOps.autocontrast(gray)
+                gray = ImageEnhance.Contrast(gray).enhance(2.0)
+                gray = ImageEnhance.Sharpness(gray).enhance(2.0)
 
-            except Exception:
+                scale = 2 if max(gray.size) < 1800 else 1
+                if scale > 1:
+                    gray = gray.resize((gray.width * scale, gray.height * scale))
 
-                extracted_text = (
-                    f"Receipt {filename} "
-                    f"Total Amount: 420.00 "
-                    f"Date: "
-                    f"{datetime.now().strftime('%Y-%m-%d')}"
-                )
+                variants = [
+                    (gray, "--oem 3 --psm 6"),
+                    (gray, "--oem 3 --psm 11"),
+                ]
+
+                threshold = gray.point(lambda p: 255 if p > 170 else 0)
+                variants.append((threshold, "--oem 3 --psm 6"))
+                variants.append((threshold, "--oem 3 --psm 11"))
+
+                texts = []
+                for variant, config in variants:
+                    try:
+                        text = pytesseract.image_to_string(variant, config=config)
+                        if text and text.strip():
+                            texts.append(text.strip())
+                    except Exception:
+                        continue
+
+                # Use the best/longest non-empty OCR pass. The parser then
+                # applies label-aware date and total extraction.
+                extracted_text = max(texts, key=len) if texts else ""
+
+            except Exception as e:
+                # Never create fake receipt data.
+                extracted_text = ""
 
         # ----------------------------------------------------
         # AI / RECEIPT PARSER
@@ -1032,9 +1047,7 @@ class ReceiptScanView(APIView):
                 "title": "Scanned Receipt",
                 "amount": 0,
                 "category": "General",
-                "date": datetime.now().strftime(
-                    "%Y-%m-%d"
-                ),
+                "date": None,
                 "error": str(e)
             }
 
@@ -1046,9 +1059,7 @@ class ReceiptScanView(APIView):
                 "title": "Scanned Receipt",
                 "amount": 0,
                 "category": "General",
-                "date": datetime.now().strftime(
-                    "%Y-%m-%d"
-                )
+                "date": None
             }
 
         # ----------------------------------------------------
@@ -1083,9 +1094,7 @@ class ReceiptScanView(APIView):
         )
 
         if not parsed_date:
-            parsed_date = datetime.now().strftime(
-                "%Y-%m-%d"
-            )
+            parsed_date = None
 
         duplicate_tx = None
 

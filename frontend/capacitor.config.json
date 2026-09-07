@@ -1,9 +1,5 @@
 {
   "appId": "com.expensetracker.app",
-  "appName": "Titan Vault",
-  "webDir": "dist",
-  "server": {
-    "url": "http://192.168.1.4:5173",
-    "cleartext": true
-  }
+  "appName": "SMART  AI EXPENSE TRACKER",
+  "webDir": "dist"
 }
