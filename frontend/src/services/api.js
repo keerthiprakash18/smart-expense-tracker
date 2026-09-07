@@ -1,13 +1,19 @@
-import axios from 'axios';
+import axios from "axios";
 
 // ======================================================
 // SMART EXPENSE TRACKER - API CONFIG
 // ======================================================
 
-// Public backend hosted on Render
+// Local development:
+// VITE_API_URL=http://127.0.0.1:8000
+
+// Production:
+// VITE_API_URL=https://smart-expense-tracker-zaxw.onrender.com
+
+// If VITE_API_URL is missing, use the production backend.
 const API_BASE_URL =
-  'http://127.0.0.1:8000';
-    
+  import.meta.env.VITE_API_URL ||
+  "https://smart-expense-tracker-zaxw.onrender.com";
 
 // ======================================================
 // AXIOS INSTANCE
@@ -15,7 +21,7 @@ const API_BASE_URL =
 
 const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 60000,
+  timeout: 90000,
 });
 
 // ======================================================
@@ -23,26 +29,26 @@ const api = axios.create({
 // ======================================================
 
 export const getAccessToken = () => {
-  return localStorage.getItem('access_token');
+  return localStorage.getItem("access_token");
 };
 
 export const getRefreshToken = () => {
-  return localStorage.getItem('refresh_token');
+  return localStorage.getItem("refresh_token");
 };
 
 export const setTokens = (accessToken, refreshToken) => {
   if (accessToken) {
-    localStorage.setItem('access_token', accessToken);
+    localStorage.setItem("access_token", accessToken);
   }
 
   if (refreshToken) {
-    localStorage.setItem('refresh_token', refreshToken);
+    localStorage.setItem("refresh_token", refreshToken);
   }
 };
 
 export const clearTokens = () => {
-  localStorage.removeItem('access_token');
-  localStorage.removeItem('refresh_token');
+  localStorage.removeItem("access_token");
+  localStorage.removeItem("refresh_token");
 };
 
 // ======================================================
@@ -53,13 +59,21 @@ api.interceptors.request.use(
   (config) => {
     const token = getAccessToken();
 
+    // Make sure headers object exists
+    config.headers = config.headers || {};
+
+    // Attach JWT token when available
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
 
-    // Don't overwrite multipart/form-data headers
-    if (!(config.data instanceof FormData)) {
-      config.headers['Content-Type'] = 'application/json';
+    // IMPORTANT:
+    // Do not manually set Content-Type for FormData.
+    // Browser/Axios must generate the multipart boundary.
+    if (config.data instanceof FormData) {
+      delete config.headers["Content-Type"];
+    } else {
+      config.headers["Content-Type"] = "application/json";
     }
 
     return config;
@@ -78,6 +92,7 @@ api.interceptors.response.use(
     return response;
   },
   (error) => {
+    // Invalid / expired JWT
     if (error.response?.status === 401) {
       clearTokens();
     }
