@@ -1,5 +1,9 @@
-import React, { useState, useEffect } from "react";
-import { getExpenses, addExpense, updateExpense, deleteExpense } from "../services/expenseService";
+import React, { useState, useEffect, useCallback } from "react";
+import {
+  getExpenses,
+  addExpense,
+  updateExpense,
+} from "../services/expenseService";
 import ReceiptUpload from "../components/expense/ReceiptUpload";
 import ExpenseForm from "../components/expense/ExpenseForm";
 import ExpenseList from "../components/expense/ExpenseList";
@@ -13,16 +17,16 @@ const Expenses = () => {
   const [editingExpense, setEditingExpense] = useState(null);
   const [ocrData, setOcrData] = useState(null);
 
-  // Search and Filter states
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
 
-  const fetchExpenses = async () => {
+  const fetchExpenses = useCallback(async () => {
     try {
       setLoading(true);
       setError("");
+
       const params = {};
       if (search) params.search = search;
       if (category) params.category = category;
@@ -30,7 +34,7 @@ const Expenses = () => {
       if (endDate) params.end_date = endDate;
 
       const data = await getExpenses(params);
-      
+
       if (Array.isArray(data)) {
         setExpenses(data);
       } else if (data && Array.isArray(data.results)) {
@@ -41,19 +45,22 @@ const Expenses = () => {
     } catch (err) {
       console.error("Failed to fetch expenses:", err);
       setExpenses([]);
+
       if (err.response?.status === 401) {
         setError("Session expired. Please login again.");
+      } else if (!err.response) {
+        setError("Failed to connect to the backend server. Please try again.");
       } else {
-        setError("Failed to load expenses. Please check backend connection.");
+        setError("Failed to load expenses. Please try again.");
       }
     } finally {
       setLoading(false);
     }
-  };
+  }, [search, category, startDate, endDate]);
 
   useEffect(() => {
     fetchExpenses();
-  }, [category, startDate, endDate]);
+  }, [category, startDate, endDate, fetchExpenses]);
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
@@ -67,14 +74,12 @@ const Expenses = () => {
     setEndDate("");
   };
 
-  // OCR result flow
   const handleOCRResult = (data) => {
     setOcrData(data);
     setShowForm(true);
     setEditingExpense(null);
   };
 
-  // Save new or updated expense
   const handleSaveExpense = async (formData) => {
     try {
       if (editingExpense) {
@@ -82,34 +87,19 @@ const Expenses = () => {
       } else {
         await addExpense(formData);
       }
+
       setShowForm(false);
       setEditingExpense(null);
       setOcrData(null);
-      fetchExpenses();
+      await fetchExpenses();
     } catch (err) {
       console.error("Save expense error:", err);
-      alert("Error saving expense. Please check all fields.");
+      alert(
+        err.response?.data?.error ||
+          err.response?.data?.detail ||
+          "Error saving expense. Please check all fields."
+      );
     }
-  };
-
-  // Delete expense
-  const handleDeleteExpense = async (id) => {
-    if (window.confirm("Are you sure you want to delete this expense?")) {
-      try {
-        await deleteExpense(id);
-        fetchExpenses();
-      } catch (err) {
-        console.error("Delete error:", err);
-        alert("Failed to delete expense.");
-      }
-    }
-  };
-
-  // Edit click
-  const handleEditClick = (expense) => {
-    setEditingExpense(expense);
-    setOcrData(null);
-    setShowForm(true);
   };
 
   return (
@@ -117,13 +107,17 @@ const Expenses = () => {
       <div style={styles.headerRow}>
         <div>
           <h2 style={styles.heading}>Expense Management</h2>
-          <p style={styles.subheading}>Track, scan, and organize your receipts and spending</p>
+          <p style={styles.subheading}>
+            Track, scan, and organize your receipts and spending
+          </p>
         </div>
+
         <button
+          type="button"
           onClick={() => {
             setEditingExpense(null);
             setOcrData(null);
-            setShowForm(!showForm);
+            setShowForm((previous) => !previous);
           }}
           style={styles.addButton}
         >
@@ -131,10 +125,8 @@ const Expenses = () => {
         </button>
       </div>
 
-      {/* OCR Upload Section */}
       <ReceiptUpload onOCRResult={handleOCRResult} />
 
-      {/* Expense Add / Edit Form Modal or Inline */}
       {showForm && (
         <div style={styles.formContainer}>
           <ExpenseForm
@@ -150,7 +142,6 @@ const Expenses = () => {
         </div>
       )}
 
-      {/* Filters & Search */}
       <div style={styles.filterCard}>
         <form onSubmit={handleSearchSubmit} style={styles.filterForm}>
           <input
@@ -160,6 +151,7 @@ const Expenses = () => {
             onChange={(e) => setSearch(e.target.value)}
             style={styles.input}
           />
+
           <select
             value={category}
             onChange={(e) => setCategory(e.target.value)}
@@ -174,28 +166,35 @@ const Expenses = () => {
             <option value="Healthcare">Healthcare</option>
             <option value="Other">Other</option>
           </select>
+
           <input
             type="date"
             value={startDate}
             onChange={(e) => setStartDate(e.target.value)}
             style={styles.input}
           />
+
           <input
             type="date"
             value={endDate}
             onChange={(e) => setEndDate(e.target.value)}
             style={styles.input}
           />
+
           <button type="submit" style={styles.filterBtn}>
             Filter
           </button>
-          <button type="button" onClick={handleResetFilters} style={styles.resetBtn}>
+
+          <button
+            type="button"
+            onClick={handleResetFilters}
+            style={styles.resetBtn}
+          >
             Reset
           </button>
         </form>
       </div>
 
-      {/* Expense List display */}
       {loading ? (
         <div style={styles.loading}>Loading expenses...</div>
       ) : error ? (
@@ -203,8 +202,7 @@ const Expenses = () => {
       ) : (
         <ExpenseList
           expenses={Array.isArray(expenses) ? expenses : []}
-          onEdit={handleEditClick}
-          onDelete={handleDeleteExpense}
+          onExpenseChanged={fetchExpenses}
         />
       )}
     </div>

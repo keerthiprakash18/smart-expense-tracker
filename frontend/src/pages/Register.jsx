@@ -35,6 +35,7 @@ const Register = () => {
     number: /\d/.test(formData.password),
     special: /[@$!%*?&#]/.test(formData.password),
   };
+
   const isPasswordValid = Object.values(checks).every(Boolean);
 
   const handleChange = (e) => {
@@ -87,15 +88,20 @@ const Register = () => {
       setStep(2);
     } catch (err) {
       console.error("Registration Error Object:", err);
+
       if (err.response) {
-        // Show actual backend error text
         const backendMsg =
           err.response.data?.error ||
           err.response.data?.detail ||
-          (typeof err.response.data === "string" ? err.response.data : JSON.stringify(err.response.data));
+          (typeof err.response.data === "string"
+            ? err.response.data
+            : JSON.stringify(err.response.data));
+
         setError(`Error (${err.response.status}): ${backendMsg}`);
       } else if (err.request) {
-        setError("Network error: Cannot reach Django backend server at http://127.0.0.1:8000");
+        setError(
+          "Network error: Cannot reach the backend server. Please try again."
+        );
       } else {
         setError(`Client error: ${err.message}`);
       }
@@ -106,6 +112,7 @@ const Register = () => {
 
   const handleVerifyOtp = async (e) => {
     e.preventDefault();
+
     if (otp.length !== 6) {
       setError("Please enter a valid 6-digit OTP.");
       return;
@@ -118,7 +125,7 @@ const Register = () => {
       await api.post("/api/expenses/verify-otp/", {
         phone: fullPhone,
         email: formData.email.trim().toLowerCase(),
-        otp: otp,
+        otp,
       });
 
       alert("Account verified successfully! You can now login.");
@@ -137,7 +144,10 @@ const Register = () => {
   return (
     <div style={styles.container}>
       <div style={styles.card}>
-        <h2 style={styles.heading}>{step === 1 ? "Create Account" : "OTP Verification"}</h2>
+        <h2 style={styles.heading}>
+          {step === 1 ? "Create Account" : "OTP Verification"}
+        </h2>
+
         <p style={styles.subheading}>
           {step === 1
             ? "Track your daily expenses and finances"
@@ -189,6 +199,7 @@ const Register = () => {
                     </option>
                   ))}
                 </select>
+
                 <input
                   type="tel"
                   value={phoneNumber}
@@ -249,8 +260,14 @@ const Register = () => {
               disabled={loading || !isPasswordValid || phoneNumber.length < 10}
               style={{
                 ...styles.submitBtn,
-                opacity: loading || !isPasswordValid || phoneNumber.length < 10 ? 0.6 : 1,
-                cursor: loading || !isPasswordValid || phoneNumber.length < 10 ? "not-allowed" : "pointer",
+                opacity:
+                  loading || !isPasswordValid || phoneNumber.length < 10
+                    ? 0.6
+                    : 1,
+                cursor:
+                  loading || !isPasswordValid || phoneNumber.length < 10
+                    ? "not-allowed"
+                    : "pointer",
               }}
             >
               {loading ? "Sending OTP..." : "Register & Get OTP"}
@@ -274,9 +291,20 @@ const Register = () => {
                 onChange={(e) => setOtp(e.target.value.trim())}
                 placeholder="------"
                 required
-                style={{ ...styles.input, textAlign: "center", fontSize: "22px", letterSpacing: "8px" }}
+                style={{
+                  ...styles.input,
+                  textAlign: "center",
+                  fontSize: "22px",
+                  letterSpacing: "8px",
+                }}
               />
-              <small style={{ color: "#64748b", fontSize: "12px", marginTop: "4px" }}>
+              <small
+                style={{
+                  color: "#64748b",
+                  fontSize: "12px",
+                  marginTop: "4px",
+                }}
+              >
                 Check your backend Django terminal for the generated OTP.
               </small>
             </div>
@@ -285,7 +313,15 @@ const Register = () => {
               {loading ? "Verifying..." : "Verify & Activate Account"}
             </button>
 
-            <button type="button" onClick={() => setStep(1)} style={styles.backBtn}>
+            <button
+              type="button"
+              onClick={() => {
+                setStep(1);
+                setError("");
+                setMessage("");
+              }}
+              style={styles.backBtn}
+            >
               Back to Edit Number
             </button>
           </form>
@@ -296,24 +332,130 @@ const Register = () => {
 };
 
 const styles = {
-  container: { minHeight: "85vh", display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" },
-  card: { width: "100%", maxWidth: "440px", backgroundColor: "#fff", borderRadius: "10px", padding: "30px", boxShadow: "0 4px 20px rgba(0,0,0,0.08)" },
-  heading: { margin: "0 0 6px 0", fontSize: "22px", fontWeight: "700", color: "#1e293b" },
-  subheading: { margin: "0 0 20px 0", fontSize: "13px", color: "#64748b" },
-  errorAlert: { padding: "12px 14px", marginBottom: "14px", borderRadius: "6px", backgroundColor: "#fef2f2", color: "#dc2626", fontSize: "13px", border: "1px solid #fecaca", wordBreak: "break-word" },
-  successAlert: { padding: "10px 14px", marginBottom: "14px", borderRadius: "6px", backgroundColor: "#f0fdf4", color: "#16a34a", fontSize: "13px" },
-  form: { display: "flex", flexDirection: "column", gap: "15px" },
-  formGroup: { display: "flex", flexDirection: "column", gap: "5px", textAlign: "left" },
-  label: { fontSize: "13px", fontWeight: "600", color: "#334155" },
-  input: { padding: "10px 12px", fontSize: "14px", borderRadius: "6px", border: "1px solid #cbd5e1", outline: "none" },
-  phoneRow: { display: "flex", gap: "8px" },
-  countrySelect: { padding: "10px 8px", fontSize: "13px", borderRadius: "6px", border: "1px solid #cbd5e1", backgroundColor: "#f8fafc", outline: "none", minWidth: "120px" },
-  phoneInput: { flex: 1, padding: "10px 12px", fontSize: "14px", borderRadius: "6px", border: "1px solid #cbd5e1", outline: "none" },
-  criteriaBox: { marginTop: "6px", display: "flex", flexDirection: "column", gap: "3px", fontSize: "11px" },
-  submitBtn: { marginTop: "6px", padding: "12px", fontSize: "14px", fontWeight: "600", color: "#fff", backgroundColor: "#2563eb", border: "none", borderRadius: "6px" },
-  backBtn: { padding: "8px", fontSize: "13px", color: "#64748b", background: "none", border: "none", cursor: "pointer" },
-  footerText: { marginTop: "12px", fontSize: "13px", color: "#64748b", textAlign: "center" },
-  link: { color: "#2563eb", textDecoration: "none", fontWeight: "600" },
+  container: {
+    minHeight: "85vh",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "20px",
+  },
+  card: {
+    width: "100%",
+    maxWidth: "440px",
+    backgroundColor: "#fff",
+    borderRadius: "10px",
+    padding: "30px",
+    boxShadow: "0 4px 20px rgba(0,0,0,0.08)",
+  },
+  heading: {
+    margin: "0 0 6px 0",
+    fontSize: "22px",
+    fontWeight: "700",
+    color: "#1e293b",
+  },
+  subheading: {
+    margin: "0 0 20px 0",
+    fontSize: "13px",
+    color: "#64748b",
+  },
+  errorAlert: {
+    padding: "12px 14px",
+    marginBottom: "14px",
+    borderRadius: "6px",
+    backgroundColor: "#fef2f2",
+    color: "#dc2626",
+    fontSize: "13px",
+    border: "1px solid #fecaca",
+    wordBreak: "break-word",
+  },
+  successAlert: {
+    padding: "10px 14px",
+    marginBottom: "14px",
+    borderRadius: "6px",
+    backgroundColor: "#f0fdf4",
+    color: "#16a34a",
+    fontSize: "13px",
+  },
+  form: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "15px",
+  },
+  formGroup: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "5px",
+    textAlign: "left",
+  },
+  label: {
+    fontSize: "13px",
+    fontWeight: "600",
+    color: "#334155",
+  },
+  input: {
+    padding: "10px 12px",
+    fontSize: "14px",
+    borderRadius: "6px",
+    border: "1px solid #cbd5e1",
+    outline: "none",
+  },
+  phoneRow: {
+    display: "flex",
+    gap: "8px",
+  },
+  countrySelect: {
+    padding: "10px 8px",
+    fontSize: "13px",
+    borderRadius: "6px",
+    border: "1px solid #cbd5e1",
+    backgroundColor: "#f8fafc",
+    outline: "none",
+    minWidth: "120px",
+  },
+  phoneInput: {
+    flex: 1,
+    padding: "10px 12px",
+    fontSize: "14px",
+    borderRadius: "6px",
+    border: "1px solid #cbd5e1",
+    outline: "none",
+  },
+  criteriaBox: {
+    marginTop: "6px",
+    display: "flex",
+    flexDirection: "column",
+    gap: "3px",
+    fontSize: "11px",
+  },
+  submitBtn: {
+    marginTop: "6px",
+    padding: "12px",
+    fontSize: "14px",
+    fontWeight: "600",
+    color: "#fff",
+    backgroundColor: "#2563eb",
+    border: "none",
+    borderRadius: "6px",
+  },
+  backBtn: {
+    padding: "8px",
+    fontSize: "13px",
+    color: "#64748b",
+    background: "none",
+    border: "none",
+    cursor: "pointer",
+  },
+  footerText: {
+    marginTop: "12px",
+    fontSize: "13px",
+    color: "#64748b",
+    textAlign: "center",
+  },
+  link: {
+    color: "#2563eb",
+    textDecoration: "none",
+    fontWeight: "600",
+  },
 };
 
 export default Register;

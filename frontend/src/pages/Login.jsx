@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Sparkles, ArrowRight, ShieldCheck, Mail, Lock, User, AlertCircle } from 'lucide-react';
 import api, { setTokens } from '../services/api';
+import logoFull from '../assets/logo-full.png';
 
 export default function Login() {
   const [isRegister, setIsRegister] = useState(false);
@@ -91,20 +92,18 @@ export default function Login() {
         zIndex: 10
       }}>
         <div style={{ textAlign: 'center', marginBottom: '28px' }}>
-          <div style={{
-            width: '56px',
-            height: '56px',
-            borderRadius: '20px',
-            background: 'linear-gradient(135deg, #0A84FF 0%, #0056D2 100%)',
-            margin: '0 auto 16px auto',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            boxShadow: '0 12px 28px rgba(10, 132, 255, 0.4)',
-            border: '1px solid rgba(255, 255, 255, 0.25)'
-          }}>
-            <Sparkles size={28} color="#FFFFFF" />
-          </div>
+          <img
+            src={logoFull}
+            alt="Smart AI Expense Tracker"
+            style={{
+              width: '230px',
+              maxWidth: '82%',
+              height: 'auto',
+              display: 'block',
+              margin: '0 auto 20px auto',
+              objectFit: 'contain'
+            }}
+          />
           <h2 style={{ color: '#FFFFFF', fontSize: '24px', fontWeight: 800, margin: '0 0 6px 0', letterSpacing: '-0.5px' }}>
             {isRegister ? 'Create Account' : 'Welcome Back'}
           </h2>
